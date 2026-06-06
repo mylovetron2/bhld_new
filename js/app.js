@@ -112,9 +112,9 @@ function initTabs() {
       if (tab === 'certificates') initCertificatesTab();
       if (tab === 'management') initManagementTab();
       if (tab === 'employees') initEmployeesTab();
-      if (tab === 'capphat') initCapPhatTab();
       if (tab === 'reports') initReportsTab();
       if (tab === 'changelog') initChangelogTab();
+      if (tab === 'allocate') initAllocateTab();
     });
   });
 }
@@ -1219,172 +1219,6 @@ async function updateHistorySl(input) {
 }
 
 // ====================================================================
-// TAB: CẤP PHÁT THEO ĐỘI
-// ====================================================================
-let cpInitialized = false;
-let cpEmployeeList = [];
-
-async function initCapPhatTab() {
-  if (!cpInitialized) {
-    cpInitialized = true;
-    document.getElementById('cp-ngay-input').value = today();
-
-    // Load định mức
-    if (!State.dinhMucData) {
-      const dmRes = await API.getDinhMuc();
-      if (dmRes.success) State.dinhMucData = dmRes.data;
-    }
-    const dmSel = document.getElementById('cp-dinhmuc-select');
-    (State.dinhMucData || []).forEach(dm => {
-      dmSel.insertAdjacentHTML('beforeend',
-        `<option value="${escHtml(dm.madm)}">${escHtml(dm.madm)}${dm.mota ? ' — ' + escHtml(dm.mota) : ''}</option>`);
-    });
-
-    // Load phòng ban từ danh sách nhân viên
-    await cpLoadPhongBan();
-
-    document.getElementById('cp-dinhmuc-select').addEventListener('change', cpPreviewVattu);
-    document.getElementById('cp-load-btn').addEventListener('click', cpLoadEmployees);
-    document.getElementById('cp-check-all').addEventListener('change', function () {
-      document.querySelectorAll('#cp-tbody .cp-chk').forEach(cb => { cb.checked = this.checked; });
-      cpUpdateCount();
-    });
-    document.getElementById('cp-execute-btn').addEventListener('click', cpExecute);
-  }
-}
-
-async function cpLoadPhongBan() {
-  let emps = State.employees;
-  if (!emps || emps.length === 0) {
-    const res = await API.getEmployees();
-    if (res.success) emps = res.data;
-  }
-  const pbSel = document.getElementById('cp-mapb-select');
-  const seen = new Set();
-  (emps || []).forEach(e => {
-    if (e.mapb && !seen.has(e.mapb)) {
-      seen.add(e.mapb);
-      pbSel.insertAdjacentHTML('beforeend',
-        `<option value="${escHtml(e.mapb)}">${escHtml(e.mapb)}${e.tenphongban ? ' — ' + escHtml(e.tenphongban) : ''}</option>`);
-    }
-  });
-}
-
-function cpPreviewVattu() {
-  const madm = document.getElementById('cp-dinhmuc-select').value;
-  const previewWrap = document.getElementById('cp-vattu-preview');
-  const badgesEl = document.getElementById('cp-vattu-badges');
-  if (!madm || !State.dinhMucData) { previewWrap.classList.add('d-none'); return; }
-  const dm = State.dinhMucData.find(d => d.madm === madm);
-  const chitiet = dm?.chitiet || [];
-  if (chitiet.length === 0) { previewWrap.classList.add('d-none'); return; }
-  badgesEl.innerHTML = chitiet.map(ct =>
-    `<span class="badge bg-light text-dark border">
-      ${escHtml(ct.tenvt || 'VT ' + ct.mavt)}
-      <span class="text-muted ms-1">(${ct.dmtg} tháng)</span>
-    </span>`
-  ).join('');
-  previewWrap.classList.remove('d-none');
-}
-
-async function cpLoadEmployees() {
-  const mapb = document.getElementById('cp-mapb-select').value;
-  if (!mapb) { showToast('Vui lòng chọn phòng ban', 'warning'); return; }
-
-  setLoading('cp-loading', true);
-  document.getElementById('cp-table-wrap').classList.add('d-none');
-  document.getElementById('cp-empty').classList.add('d-none');
-
-  const res = await API.getEmployees().catch(err => ({ success: false, message: err.message }));
-  setLoading('cp-loading', false);
-
-  if (!res.success) { showToast('Lỗi tải nhân viên: ' + (res.message || ''), 'danger'); return; }
-
-  cpEmployeeList = (res.data || []).filter(e => e.mapb === mapb);
-  if (cpEmployeeList.length === 0) {
-    document.getElementById('cp-empty').classList.remove('d-none');
-    return;
-  }
-
-  document.getElementById('cp-tbody').innerHTML = cpEmployeeList.map((emp, idx) => `
-    <tr>
-      <td><input type="checkbox" class="form-check-input cp-chk" data-idx="${idx}" checked onchange="cpUpdateCount()"></td>
-      <td class="fw-semibold">${escHtml(emp.manv)}</td>
-      <td>${escHtml(emp.tennhanvien)}</td>
-      <td>${escHtml(emp.mapb)}</td>
-      <td>${emp.dinhmuc ? `<span class="badge bg-secondary">${escHtml(emp.dinhmuc)}</span>` : '<span class="text-muted">—</span>'}</td>
-      <td class="text-center" id="cp-result-${escHtml(emp.manv)}">—</td>
-    </tr>`).join('');
-
-  document.getElementById('cp-check-all').checked = true;
-  document.getElementById('cp-table-wrap').classList.remove('d-none');
-  cpUpdateCount();
-}
-
-function cpUpdateCount() {
-  const n = document.querySelectorAll('#cp-tbody .cp-chk:checked').length;
-  document.getElementById('cp-selected-count').textContent = `${n} nhân viên được chọn`;
-}
-
-async function cpExecute() {
-  const madm = document.getElementById('cp-dinhmuc-select').value;
-  const ngct = document.getElementById('cp-ngay-input').value;
-  const mapb = document.getElementById('cp-mapb-select').value;
-
-  if (!madm) { showToast('Vui lòng chọn định mức', 'warning'); return; }
-  if (!ngct) { showToast('Vui lòng chọn ngày cấp', 'warning'); return; }
-
-  const checkedBoxes = document.querySelectorAll('#cp-tbody .cp-chk:checked');
-  if (checkedBoxes.length === 0) { showToast('Chưa chọn nhân viên nào', 'warning'); return; }
-
-  // Lấy danh sách vật tư từ định mức
-  const dm = (State.dinhMucData || []).find(d => d.madm === madm);
-  const vattu = (dm?.chitiet || []).map(ct => ({ mavt: ct.mavt, dmtg: ct.dmtg || 0 }));
-  if (vattu.length === 0) { showToast('Định mức này chưa có vật tư', 'warning'); return; }
-
-  const btn = document.getElementById('cp-execute-btn');
-  const origText = btn.innerHTML;
-  btn.disabled = true;
-
-  const ym = ngct.substring(0, 7);
-  let successCount = 0, errorCount = 0;
-  const total = checkedBoxes.length;
-
-  for (let i = 0; i < checkedBoxes.length; i++) {
-    const cb = checkedBoxes[i];
-    const idx = parseInt(cb.dataset.idx);
-    const emp = cpEmployeeList[idx];
-    if (!emp) continue;
-
-    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý ${i + 1}/${total}...`;
-    const resultEl = document.getElementById(`cp-result-${emp.manv}`);
-    if (resultEl) resultEl.innerHTML = '<span class="badge bg-secondary">Đang xử lý...</span>';
-
-    const manvFmt = /^\d{4}$/.test(emp.manv) ? '0' + emp.manv : emp.manv;
-    const mact = `${ym}-${mapb}-${manvFmt}`;
-
-    try {
-      const res = await API.allocateFirst({ mact, manv: emp.manv, ngct, mapb, madm, vattu });
-      if (res.success) {
-        successCount++;
-        if (resultEl) resultEl.innerHTML = `<span class="badge bg-success">✓ Đã cấp (${res.data?.allocated || 0} VT)</span>`;
-      } else {
-        errorCount++;
-        if (resultEl) resultEl.innerHTML = `<span class="badge bg-danger" title="${escHtml(res.message || '')}">✗ Lỗi</span>`;
-      }
-    } catch (err) {
-      errorCount++;
-      if (resultEl) resultEl.innerHTML = `<span class="badge bg-danger" title="${escHtml(err.message)}">✗ Lỗi</span>`;
-    }
-  }
-
-  btn.disabled = false;
-  btn.innerHTML = origText;
-  showToast(`Hoàn tất: ${successCount} thành công${errorCount ? ', ' + errorCount + ' lỗi' : ''}`,
-    errorCount === 0 ? 'success' : successCount > 0 ? 'warning' : 'danger');
-}
-
-// ====================================================================
 // TAB 4: BÁO CÁO
 // ====================================================================
 let rptInitialized = false;
@@ -1964,6 +1798,199 @@ async function loadChangelog() {
 function clGoPage(p) {
   clCurrentPage = p;
   loadChangelog();
+}
+
+// ====================================================================
+// TAB: CẤP PHÁT
+// ====================================================================
+let allocInitialized = false;
+let allocItems = []; // [{mact, mavt, tenvt, dvt, dmtg}]
+let allocSelectedKeys = new Set();
+
+async function initAllocateTab() {
+  if (!allocInitialized) {
+    allocInitialized = true;
+    document.getElementById('alloc-date').value = today();
+    await populateAllocEmpSelect();
+    document.getElementById('alloc-pb-filter').addEventListener('change', filterAllocEmpByPb);
+    document.getElementById('alloc-load-btn').addEventListener('click', loadAllocateList);
+    document.getElementById('alloc-bulk-btn').addEventListener('click', doAllocateBulk);
+    document.getElementById('alloc-check-all').addEventListener('change', e => {
+      document.querySelectorAll('.alloc-row-check').forEach(cb => {
+        cb.checked = e.target.checked;
+        e.target.checked ? allocSelectedKeys.add(cb.dataset.key) : allocSelectedKeys.delete(cb.dataset.key);
+      });
+      updateAllocBulkBtn();
+    });
+  } else {
+    // Re-sync NV list if employees updated
+    await populateAllocEmpSelect();
+  }
+}
+
+async function populateAllocEmpSelect() {
+  if (!State.employees || !State.employees.length) {
+    const res = await API.getEmployees();
+    if (res.success) State.employees = res.data;
+  }
+  // Populate PB filter
+  const pbSel = document.getElementById('alloc-pb-filter');
+  const pbs = [...new Set((State.employees || []).map(e => e.mapb).filter(Boolean))].sort();
+  const curPb = pbSel.value;
+  pbSel.innerHTML = '<option value="">-- Tất cả phòng ban --</option>';
+  pbs.forEach(pb => pbSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(pb)}">${escHtml(pb)}</option>`));
+  pbSel.value = curPb;
+  filterAllocEmpByPb();
+}
+
+function filterAllocEmpByPb() {
+  const pb = document.getElementById('alloc-pb-filter').value;
+  const empSel = document.getElementById('alloc-emp-select');
+  const cur = empSel.value;
+  empSel.innerHTML = '<option value="">-- Chọn nhân viên --</option>';
+  (State.employees || []).filter(e => !pb || e.mapb === pb).forEach(emp => {
+    empSel.insertAdjacentHTML('beforeend',
+      `<option value="${escHtml(emp.manv)}">${escHtml(emp.manv)} – ${escHtml(emp.tennhanvien)}</option>`);
+  });
+  if (cur) empSel.value = cur;
+}
+
+async function loadAllocateList() {
+  const manv = document.getElementById('alloc-emp-select').value;
+  if (!manv) { showToast('Vui lòng chọn nhân viên', 'warning'); return; }
+  setLoading('alloc-loading', true);
+  document.getElementById('alloc-table-wrap').classList.add('d-none');
+  document.getElementById('alloc-empty').classList.add('d-none');
+  allocItems = [];
+  allocSelectedKeys.clear();
+  document.getElementById('alloc-check-all').checked = false;
+  updateAllocBulkBtn();
+  try {
+    const certsRes = await API.getCertificates({ manv });
+    if (!certsRes.success || !certsRes.data?.length) {
+      document.getElementById('alloc-empty').classList.remove('d-none');
+      return;
+    }
+    const detailsArr = await Promise.all(
+      certsRes.data.map(c => API.getCertificateDetails(c.mact).catch(() => ({ success: false })))
+    );
+    certsRes.data.forEach((cert, i) => {
+      const d = detailsArr[i];
+      if (d.success && d.data) {
+        d.data.filter(item => item.sl == 0).forEach(item => {
+          allocItems.push({ mact: cert.mact, mavt: item.mavt, tenvt: item.tenvt, dvt: item.dvt, dmtg: item.dmtg });
+        });
+      }
+    });
+    if (allocItems.length === 0) {
+      document.getElementById('alloc-empty').classList.remove('d-none');
+      return;
+    }
+    renderAllocateList();
+    document.getElementById('alloc-table-wrap').classList.remove('d-none');
+  } catch (err) {
+    showToast('Lỗi tải dữ liệu: ' + err.message, 'danger');
+  } finally {
+    setLoading('alloc-loading', false);
+  }
+}
+
+function renderAllocateList() {
+  const commonDate = document.getElementById('alloc-date').value || today();
+  document.getElementById('alloc-tbody').innerHTML = allocItems.map((item, idx) => {
+    const key = `${item.mact}-${item.mavt}`;
+    return `<tr>
+      <td><input type="checkbox" class="form-check-input alloc-row-check" data-key="${escHtml(key)}" onchange="onAllocCheckChange(this)" /></td>
+      <td><span class="badge bg-secondary">${escHtml(item.mact)}</span></td>
+      <td><span class="fw-medium">${escHtml(item.tenvt || 'Mã: ' + item.mavt)}</span></td>
+      <td class="text-center text-muted small">${escHtml(item.dvt || '—')}</td>
+      <td class="text-center">${item.dmtg} tháng</td>
+      <td><input type="date" class="form-control form-control-sm" id="alloc-row-date-${idx}" value="${commonDate}" style="min-width:140px" /></td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-success" onclick="doAllocateSingle(${idx}, this)">
+          <i class="bi bi-box-arrow-in-down me-1"></i>Cấp phát
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function onAllocCheckChange(cb) {
+  cb.checked ? allocSelectedKeys.add(cb.dataset.key) : allocSelectedKeys.delete(cb.dataset.key);
+  updateAllocBulkBtn();
+}
+
+function updateAllocBulkBtn() {
+  const n = allocSelectedKeys.size;
+  document.getElementById('alloc-selected-count').textContent = n;
+  document.getElementById('alloc-bulk-btn').disabled = n === 0;
+}
+
+async function doAllocateSingle(idx, btn) {
+  const item = allocItems[idx];
+  const ngnhan = document.getElementById(`alloc-row-date-${idx}`)?.value || today();
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    const res = await API.allocate(item.mact, item.mavt, ngnhan);
+    if (res.success) {
+      showToast(`Đã cấp phát: ${item.tenvt || item.mavt}`, 'success');
+      allocSelectedKeys.delete(`${item.mact}-${item.mavt}`);
+      allocItems.splice(idx, 1);
+      if (allocItems.length === 0) {
+        document.getElementById('alloc-table-wrap').classList.add('d-none');
+        document.getElementById('alloc-empty').classList.remove('d-none');
+      } else {
+        renderAllocateList();
+      }
+      updateAllocBulkBtn();
+    } else {
+      showToast('Lỗi: ' + (res.message || ''), 'danger');
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  } catch (err) {
+    showToast('Lỗi: ' + err.message, 'danger');
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
+async function doAllocateBulk() {
+  if (allocSelectedKeys.size === 0) return;
+  const bulkBtn = document.getElementById('alloc-bulk-btn');
+  const origHtml = bulkBtn.innerHTML;
+  bulkBtn.disabled = true;
+  bulkBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
+  const tasks = allocItems
+    .map((item, idx) => ({ item, idx, key: `${item.mact}-${item.mavt}` }))
+    .filter(t => allocSelectedKeys.has(t.key));
+  const results = await Promise.allSettled(
+    tasks.map(t => {
+      const rowDate = document.getElementById(`alloc-row-date-${t.idx}`)?.value ||
+        document.getElementById('alloc-date').value || today();
+      return API.allocate(t.item.mact, t.item.mavt, rowDate);
+    })
+  );
+  let success = 0, failed = 0;
+  const doneKeys = new Set();
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value?.success) { success++; doneKeys.add(tasks[i].key); }
+    else failed++;
+  });
+  allocItems = allocItems.filter(item => !doneKeys.has(`${item.mact}-${item.mavt}`));
+  allocSelectedKeys.clear();
+  if (success) showToast(`Đã cấp phát ${success} vật tư${failed ? ', ' + failed + ' lỗi' : ''}`, failed ? 'warning' : 'success');
+  if (allocItems.length === 0) {
+    document.getElementById('alloc-table-wrap').classList.add('d-none');
+    document.getElementById('alloc-empty').classList.remove('d-none');
+  } else {
+    renderAllocateList();
+  }
+  updateAllocBulkBtn();
+  bulkBtn.disabled = false;
+  bulkBtn.innerHTML = origHtml;
 }
 
 // ====================================================================
