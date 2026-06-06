@@ -33,6 +33,16 @@ function formatDate(str) {
   } catch { return str; }
 }
 
+function calcNgayTiepTheo(ngnhan, dmtg) {
+  if (!ngnhan || ngnhan === '1911-11-11' || !dmtg) return '—';
+  try {
+    const d = new Date(ngnhan);
+    if (isNaN(d)) return '—';
+    d.setMonth(d.getMonth() + parseInt(dmtg));
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch { return '—'; }
+}
+
 function escHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -246,27 +256,31 @@ function renderCertDetails(mact, details) {
   const rows = details.map(d => {
     const key = `${mact}-${d.mavt}`;
     const isAllocated = d.sl > 0;
-    const isPending = d.ngnhan === '1911-11-11' || !d.ngnhan;
     const isChecked = State.selectedEquipment.has(key);
+    const now = new Date();
 
-    let statusBadge = '';
-    if (!isAllocated) statusBadge = '<span class="badge bg-secondary">Đã trả</span>';
-    else if (isPending) statusBadge = '<span class="badge bg-warning text-dark">Chưa nhận</span>';
-    else statusBadge = '<span class="badge bg-success">Đã cấp</span>';
+    let statusBadge;
+    if (!isAllocated) {
+      statusBadge = '<span class="badge bg-secondary">Chưa cấp</span>';
+    } else {
+      const due = new Date(d.ngnhan);
+      due.setMonth(due.getMonth() + parseInt(d.dmtg || 0));
+      if (d.ngnhan && !isNaN(due) && now > due) statusBadge = '<span class="badge bg-danger">Quá hạn</span>';
+      else statusBadge = '<span class="badge bg-success">Đang dùng</span>';
+    }
 
     let actionBtn = '';
-    if (isPending && isAllocated) {
-      // Can be allocated
-      actionBtn = `<button class="btn btn-sm btn-outline-success" onclick="openAllocateModal('${escHtml(mact)}',${d.mavt},'${escHtml(d.tenvt||'')}')">
-        <i class="bi bi-box-arrow-in-down me-1"></i>Cấp phát
-      </button>`;
-    } else if (isAllocated) {
+    if (isAllocated) {
       actionBtn = `<button class="btn btn-sm btn-outline-danger" onclick="confirmDeallocate('${escHtml(mact)}',${d.mavt},'${escHtml(d.tenvt||'')}')">
         <i class="bi bi-box-arrow-up me-1"></i>Trả lại
       </button>`;
+    } else {
+      actionBtn = `<button class="btn btn-sm btn-outline-success" onclick="openAllocateModal('${escHtml(mact)}',${d.mavt},'${escHtml(d.tenvt||'')}')">
+        <i class="bi bi-box-arrow-in-down me-1"></i>Cấp phát
+      </button>`;
     }
 
-    const checkboxHtml = isPending && isAllocated
+    const checkboxHtml = !isAllocated
       ? `<input type="checkbox" class="form-check-input equip-check" data-key="${escHtml(key)}" data-mact="${escHtml(mact)}" data-mavt="${d.mavt}" data-tenvt="${escHtml(d.tenvt||'')}" ${isChecked ? 'checked' : ''} />`
       : '';
 
@@ -279,7 +293,7 @@ function renderCertDetails(mact, details) {
       <td class="text-center">${d.sl}</td>
       <td class="text-center">${d.dmtg} tháng</td>
       <td>${formatDate(d.ngnhan)}</td>
-      <td>${formatDate(d.ngnhantt)}</td>
+      <td>${calcNgayTiepTheo(d.ngnhan, d.dmtg)}</td>
       <td>${statusBadge}</td>
       <td class="text-end pe-3">${actionBtn}</td>
     </tr>`;
@@ -293,8 +307,8 @@ function renderCertDetails(mact, details) {
           <th>Vật tư</th>
           <th class="text-center">SL</th>
           <th class="text-center">ĐMTG</th>
-          <th>Ngày nhận KH</th>
-          <th>Ngày nhận TT</th>
+          <th>Ngày nhận</th>
+          <th>Ngày nhận tiếp theo</th>
           <th>Trạng thái</th>
           <th class="text-end pe-3">Thao tác</th>
         </tr>
@@ -605,17 +619,23 @@ function renderCdmTable(mact, details) {
   }
   tbody.innerHTML = details.map(d => {
     const isAllocated = d.sl > 0;
-    const isPending = d.ngnhan === '1911-11-11' || !d.ngnhan;
-    let status = isPending ? '<span class="badge bg-warning text-dark">Chưa nhận</span>'
-      : isAllocated ? '<span class="badge bg-success">Đã cấp</span>'
-      : '<span class="badge bg-secondary">Đã trả</span>';
+    const now = new Date();
+    let status;
+    if (!isAllocated) {
+      status = '<span class="badge bg-secondary">Chưa cấp</span>';
+    } else {
+      const due = new Date(d.ngnhan);
+      due.setMonth(due.getMonth() + parseInt(d.dmtg || 0));
+      if (d.ngnhan && !isNaN(due) && now > due) status = '<span class="badge bg-danger">Quá hạn</span>';
+      else status = '<span class="badge bg-success">Đang dùng</span>';
+    }
     return `<tr>
       <td>${escHtml(d.tenvt || 'Mã: ' + d.mavt)}</td>
       <td>${escHtml(d.dvt || '')}</td>
       <td class="text-center">${d.dmtg}</td>
       <td class="text-center">${d.sl}</td>
       <td>${formatDate(d.ngnhan)}</td>
-      <td>${formatDate(d.ngnhantt)}</td>
+      <td>${calcNgayTiepTheo(d.ngnhan, d.dmtg)}</td>
       <td>${status}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-secondary me-1" onclick="openCdiModal('${escHtml(mact)}',${d.mavt})">
@@ -898,10 +918,11 @@ async function openEmpHistory(manv, tennhanvien) {
         const now = new Date();
         let status, statusClass;
         if (!isAllocated) {
-          status = 'Đã trả'; statusClass = 'bg-secondary';
+          status = 'Chưa cấp'; statusClass = 'bg-secondary';
         } else {
-          const due = new Date(h.ngnhantt);
-          if (!isNaN(due) && now > due) { status = 'Quá hạn'; statusClass = 'bg-danger'; }
+          const due = new Date(h.ngnhan);
+          due.setMonth(due.getMonth() + parseInt(h.dmtg || 0));
+          if (h.ngnhan && !isNaN(due) && now > due) { status = 'Quá hạn'; statusClass = 'bg-danger'; }
           else { status = 'Đang dùng'; statusClass = 'bg-success'; }
         }
         return `<tr>
@@ -922,13 +943,7 @@ async function openEmpHistory(manv, tennhanvien) {
               data-mact="${escHtml(h.mact)}" data-mavt="${h.mavt}" data-field="ngnhan"
               onchange="updateHistoryDate(this)" />
           </td>
-          <td>
-            <input type="date" class="form-control form-control-sm p-0"
-              style="min-width:120px"
-              value="${h.ngnhantt && h.ngnhantt !== '1911-11-11' ? h.ngnhantt : ''}"
-              data-mact="${escHtml(h.mact)}" data-mavt="${h.mavt}" data-field="ngnhantt"
-              onchange="updateHistoryDate(this)" />
-          </td>
+          <td>${calcNgayTiepTheo(h.ngnhan, h.dmtg)}</td>
           <td class="text-center">${h.dmtg} tháng</td>
           <td><span class="badge ${statusClass}" id="hist-status-${escHtml(h.mact)}-${h.mavt}">${status}</span></td>
         </tr>`;
@@ -971,7 +986,7 @@ async function updateHistorySl(input) {
       const badge = document.getElementById(`hist-status-${mact}-${mavt}`);
       if (badge) {
         if (sl === 0) {
-          badge.className = 'badge bg-secondary'; badge.textContent = 'Đã trả';
+          badge.className = 'badge bg-secondary'; badge.textContent = 'Chưa cấp';
         } else {
           badge.className = 'badge bg-success'; badge.textContent = 'Đang dùng';
         }
@@ -1176,8 +1191,8 @@ async function printCertificate(mact) {
   const ngayIn   = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   const rows = (details || []).map((d, i) => {
-    const ngnhanTT = (d.ngnhantt && d.ngnhantt !== '1911-11-11') ? formatDate(d.ngnhantt) : '&nbsp;';
-    const ngnhanKH = (d.ngnhan && d.ngnhan !== '1911-11-11') ? formatDate(d.ngnhan) : '&nbsp;';
+    const ngnhanKH  = (d.ngnhan && d.ngnhan !== '1911-11-11') ? formatDate(d.ngnhan) : '&nbsp;';
+    const ngnhanTT  = calcNgayTiepTheo(d.ngnhan, d.dmtg);
     const slDa = d.sl > 0 ? d.sl : 0;
     return `
       <tr>

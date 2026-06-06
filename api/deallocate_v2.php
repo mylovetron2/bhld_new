@@ -41,6 +41,13 @@ try {
         $dmtg = $row['dmtg'];
         $sl = $row['sl'];
         
+        // Lấy ngnhan trước khi reset (dùng để tính mact_next)
+        $sql_get_ngnhan = "SELECT ngnhan FROM bhld_ctctu WHERE mact = '$mact' AND mavt = $mavt";
+        $r_ng = mysqli_query($conn, $sql_get_ngnhan);
+        $ngnhan_row = $r_ng ? mysqli_fetch_assoc($r_ng) : null;
+        $ngnhan = ($ngnhan_row && $ngnhan_row['ngnhan'] && $ngnhan_row['ngnhan'] !== '1911-11-11')
+            ? $ngnhan_row['ngnhan'] : date('Y-m-d');
+        
         if ($sl != 1) {
             sendError('Thiết bị chưa được cấp phát', 400);
         }
@@ -71,7 +78,7 @@ try {
         $deleted_next_period = false;
         $mact_next = null;
         
-        if ($result_master && mysqli_num_rows($result_master) > 0) {
+        if ($result_master && mysqli_num_rows($result_master) > 0 && $dmtg > 0) {
             $master = mysqli_fetch_assoc($result_master);
             
             // Calculate next period date - use ngnhan instead of ngct
@@ -87,7 +94,8 @@ try {
             // Build mact for next period
             $mact_next = $year_month . '-' . $master['mapb'] . '-' . $manv_formatted;
             
-            // DELETE detail record only
+            // DELETE detail record only (chỉ nếu mact_next khác mact hiện tại)
+            if ($mact_next !== $mact) {
             $sql_delete_detail = "DELETE FROM bhld_ctctu 
                                  WHERE mact = '$mact_next' AND mavt = $mavt";
             
@@ -95,6 +103,7 @@ try {
             
             if ($delete_result && mysqli_affected_rows($conn) > 0) {
                 $deleted_next_period = true;
+            }
             }
         }
         

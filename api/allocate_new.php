@@ -43,7 +43,7 @@ try {
         $m_result = mysqli_query($conn, "SELECT manv, madm, mapb, ngct FROM bhld_ctu WHERE mact='$mact'");
         $next = ['created' => false];
         
-        if ($m_result && mysqli_num_rows($m_result) > 0) {
+        if ($dmtg > 0 && $m_result && mysqli_num_rows($m_result) > 0) {
             $m = mysqli_fetch_assoc($m_result);
             
             // Calculate next period date - use ngnhan instead of ngct
@@ -54,6 +54,10 @@ try {
             
             $next['mact_next'] = $mact_next;
             
+            // Bảo vệ: không tạo nếu mact_next trùng mact hiện tại
+            if ($mact_next === $mact) {
+                $next['skipped'] = 'mact_next trùng mact hiện tại (dmtg quá nhỏ)';
+            } else {
             // Check master
             $check_m = mysqli_query($conn, "SELECT mact FROM bhld_ctu WHERE mact='$mact_next'");
             if (mysqli_num_rows($check_m) === 0) {
@@ -69,6 +73,7 @@ try {
             }
             
             $next['created'] = true;
+            }
         }
         
         sendSuccess([
