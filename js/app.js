@@ -1003,7 +1003,9 @@ async function saveEmployee() {
   if (emp?.isNameOnlyEdit) {
     const newName = document.getElementById('emp-ten-input').value.trim();
     if (!newName) { showToast('Vui lòng nhập tên', 'warning'); return; }
+    const origText = btn.innerHTML;
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
     try {
       const res = await API.updateEmployeeName(emp.manv, newName);
       if (res.success) {
@@ -1018,6 +1020,7 @@ async function saveEmployee() {
       showToast('Lỗi: ' + err.message, 'danger');
     } finally {
       btn.disabled = false;
+      btn.innerHTML = origText;
     }
     return;
   }
@@ -1027,7 +1030,9 @@ async function saveEmployee() {
     const dinhmuc = document.getElementById('emp-dinhmuc-input').value.trim();
     const ngct = document.getElementById('emp-first-ct-date').value || today();
     if (!dinhmuc) { showToast('Vui lòng chọn định mức', 'warning'); return; }
+    const origText = btn.innerHTML;
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
     try {
       const manvFmt = /^\d{4}$/.test(emp.manv) ? '0' + emp.manv : emp.manv;
       const ym = ngct.substring(0, 7);
@@ -1050,6 +1055,7 @@ async function saveEmployee() {
       showToast('Lỗi: ' + err.message, 'danger');
     } finally {
       btn.disabled = false;
+      btn.innerHTML = origText;
     }
     return;
   }
@@ -1064,7 +1070,9 @@ async function saveEmployee() {
     return;
   }
 
+  const origText = btn.innerHTML;
   btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
   try {
     const payload = { manv, tennhanvien, mapb, dinhmuc: dinhmuc || '' };
     const isEdit = !!emp; // emp đã có = đang sửa
@@ -1102,6 +1110,7 @@ async function saveEmployee() {
     showToast('Lỗi: ' + err.message, 'danger');
   } finally {
     btn.disabled = false;
+    btn.innerHTML = origText;
   }
 }
 
