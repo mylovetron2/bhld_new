@@ -1046,8 +1046,6 @@ async function saveEmployee() {
       } else {
         showToast('Lỗi: ' + (allocRes.message||''), 'danger');
       }
-        showToast('Tạo CT thất bại: ' + (ctRes.message || ''), 'danger');
-      }
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'danger');
     } finally {
