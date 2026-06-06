@@ -1039,18 +1039,22 @@ async function saveEmployee() {
         slInputs.forEach(inp => { slMap[inp.dataset.mavt] = { sl: parseInt(inp.value)||0, dmtg: parseInt(inp.dataset.dmtg)||0 }; });
 
         const dm = State.dinhMucData.find(d => d.madm === dinhmuc);
+        let count = 0;
         if (dm?.chitiet?.length) {
           for (const r of dm.chitiet) {
             const override = slMap[r.mavt];
-            const qty = override ? override.sl : (r.soluong || 1);
+            const qty = override ? override.sl : 1;
             if (qty <= 0) continue;
+            const dmtg = parseInt(r.dmtg) || 0;
+            const ngnhantt = dmtg > 0 ? (() => { const d = new Date(ngct); d.setMonth(d.getMonth() + dmtg); return d.toISOString().split('T')[0]; })() : ngct;
             await API.createCertificateDetail({
-              mact, mavt: r.mavt, sl: 0, dmtg: r.dmtg,
-              ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
+              mact, mavt: r.mavt, sl: 1, dmtg,
+              ngnhan: ngct, ngnhantt
             });
+            count++;
           }
         }
-        showToast(`Đã tạo CT ${mact} với ${dm?.chitiet?.length || 0} vật tư`, 'success');
+        showToast(`Đã tạo CT ${mact} và cấp phát ${count} vật tư`, 'success');
         getModal('empModal').hide();
       } else {
         showToast('Tạo CT thất bại: ' + (ctRes.message || ''), 'danger');
@@ -1089,24 +1093,27 @@ async function saveEmployee() {
         try {
           const ctRes = await API.createCertificate({ mact, manv, ngct, mapb, madm: dinhmuc });
           if (ctRes.success) {
-            // Đọc SL từ các input trong preview table
             const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
             const slMap = {};
             slInputs.forEach(inp => { slMap[inp.dataset.mavt] = { sl: parseInt(inp.value)||0, dmtg: parseInt(inp.dataset.dmtg)||0 }; });
 
             const dm = State.dinhMucData.find(d => d.madm === dinhmuc);
+            let count = 0;
             if (dm?.chitiet?.length) {
               for (const r of dm.chitiet) {
                 const override = slMap[r.mavt];
-                const qty = override ? override.sl : (r.soluong || 1);
-                if (qty <= 0) continue; // bỏ qua vật tư SL=0
+                const qty = override ? override.sl : 1;
+                if (qty <= 0) continue;
+                const dmtg = parseInt(r.dmtg) || 0;
+                const ngnhantt = dmtg > 0 ? (() => { const d = new Date(ngct); d.setMonth(d.getMonth() + dmtg); return d.toISOString().split('T')[0]; })() : ngct;
                 await API.createCertificateDetail({
-                  mact, mavt: r.mavt, sl: 0, dmtg: r.dmtg,
-                  ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
+                  mact, mavt: r.mavt, sl: 1, dmtg,
+                  ngnhan: ngct, ngnhantt
                 });
+                count++;
               }
             }
-            showToast(`Đã tạo CT ${mact} với ${dm?.chitiet?.length || 0} vật tư`, 'success');
+            showToast(`Đã tạo CT ${mact} và cấp phát ${count} vật tư`, 'success');
           } else {
             showToast('Lưu NV OK nhưng tạo CT thất bại: ' + (ctRes.message || ''), 'warning');
           }
