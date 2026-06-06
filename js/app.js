@@ -840,9 +840,7 @@ function renderEmployeeTable(list) {
         <button class="btn btn-sm btn-outline-primary me-1" onclick="openEmpModalByIdx(${idx})">
           <i class="bi bi-pencil"></i> Sửa
         </button>
-        <button class="btn btn-sm btn-outline-success" onclick="openFirstAllocateModal('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}','${escHtml(emp.mapb)}','${escHtml(emp.dinhmuc||'')}')">
-          <i class="bi bi-box-arrow-in-down"></i> Cấp lần đầu
-        </button>
+
       </td>
     </tr>`;
   }).join('');
