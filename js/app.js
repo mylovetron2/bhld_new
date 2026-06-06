@@ -112,6 +112,7 @@ function initTabs() {
       if (tab === 'certificates') initCertificatesTab();
       if (tab === 'management') initManagementTab();
       if (tab === 'employees') initEmployeesTab();
+      if (tab === 'capphat') initCapPhatTab();
       if (tab === 'reports') initReportsTab();
       if (tab === 'changelog') initChangelogTab();
     });
@@ -1215,6 +1216,172 @@ async function updateHistorySl(input) {
     showToast('Lỗi: ' + err.message, 'danger');
     input.value = input.defaultValue;
   }
+}
+
+// ====================================================================
+// TAB: CẤP PHÁT THEO ĐỘI
+// ====================================================================
+let cpInitialized = false;
+let cpEmployeeList = [];
+
+async function initCapPhatTab() {
+  if (!cpInitialized) {
+    cpInitialized = true;
+    document.getElementById('cp-ngay-input').value = today();
+
+    // Load định mức
+    if (!State.dinhMucData) {
+      const dmRes = await API.getDinhMuc();
+      if (dmRes.success) State.dinhMucData = dmRes.data;
+    }
+    const dmSel = document.getElementById('cp-dinhmuc-select');
+    (State.dinhMucData || []).forEach(dm => {
+      dmSel.insertAdjacentHTML('beforeend',
+        `<option value="${escHtml(dm.madm)}">${escHtml(dm.madm)}${dm.mota ? ' — ' + escHtml(dm.mota) : ''}</option>`);
+    });
+
+    // Load phòng ban từ danh sách nhân viên
+    await cpLoadPhongBan();
+
+    document.getElementById('cp-dinhmuc-select').addEventListener('change', cpPreviewVattu);
+    document.getElementById('cp-load-btn').addEventListener('click', cpLoadEmployees);
+    document.getElementById('cp-check-all').addEventListener('change', function () {
+      document.querySelectorAll('#cp-tbody .cp-chk').forEach(cb => { cb.checked = this.checked; });
+      cpUpdateCount();
+    });
+    document.getElementById('cp-execute-btn').addEventListener('click', cpExecute);
+  }
+}
+
+async function cpLoadPhongBan() {
+  let emps = State.employees;
+  if (!emps || emps.length === 0) {
+    const res = await API.getEmployees();
+    if (res.success) emps = res.data;
+  }
+  const pbSel = document.getElementById('cp-mapb-select');
+  const seen = new Set();
+  (emps || []).forEach(e => {
+    if (e.mapb && !seen.has(e.mapb)) {
+      seen.add(e.mapb);
+      pbSel.insertAdjacentHTML('beforeend',
+        `<option value="${escHtml(e.mapb)}">${escHtml(e.mapb)}${e.tenphongban ? ' — ' + escHtml(e.tenphongban) : ''}</option>`);
+    }
+  });
+}
+
+function cpPreviewVattu() {
+  const madm = document.getElementById('cp-dinhmuc-select').value;
+  const previewWrap = document.getElementById('cp-vattu-preview');
+  const badgesEl = document.getElementById('cp-vattu-badges');
+  if (!madm || !State.dinhMucData) { previewWrap.classList.add('d-none'); return; }
+  const dm = State.dinhMucData.find(d => d.madm === madm);
+  const chitiet = dm?.chitiet || [];
+  if (chitiet.length === 0) { previewWrap.classList.add('d-none'); return; }
+  badgesEl.innerHTML = chitiet.map(ct =>
+    `<span class="badge bg-light text-dark border">
+      ${escHtml(ct.tenvt || 'VT ' + ct.mavt)}
+      <span class="text-muted ms-1">(${ct.dmtg} tháng)</span>
+    </span>`
+  ).join('');
+  previewWrap.classList.remove('d-none');
+}
+
+async function cpLoadEmployees() {
+  const mapb = document.getElementById('cp-mapb-select').value;
+  if (!mapb) { showToast('Vui lòng chọn phòng ban', 'warning'); return; }
+
+  setLoading('cp-loading', true);
+  document.getElementById('cp-table-wrap').classList.add('d-none');
+  document.getElementById('cp-empty').classList.add('d-none');
+
+  const res = await API.getEmployees().catch(err => ({ success: false, message: err.message }));
+  setLoading('cp-loading', false);
+
+  if (!res.success) { showToast('Lỗi tải nhân viên: ' + (res.message || ''), 'danger'); return; }
+
+  cpEmployeeList = (res.data || []).filter(e => e.mapb === mapb);
+  if (cpEmployeeList.length === 0) {
+    document.getElementById('cp-empty').classList.remove('d-none');
+    return;
+  }
+
+  document.getElementById('cp-tbody').innerHTML = cpEmployeeList.map((emp, idx) => `
+    <tr>
+      <td><input type="checkbox" class="form-check-input cp-chk" data-idx="${idx}" checked onchange="cpUpdateCount()"></td>
+      <td class="fw-semibold">${escHtml(emp.manv)}</td>
+      <td>${escHtml(emp.tennhanvien)}</td>
+      <td>${escHtml(emp.mapb)}</td>
+      <td>${emp.dinhmuc ? `<span class="badge bg-secondary">${escHtml(emp.dinhmuc)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td class="text-center" id="cp-result-${escHtml(emp.manv)}">—</td>
+    </tr>`).join('');
+
+  document.getElementById('cp-check-all').checked = true;
+  document.getElementById('cp-table-wrap').classList.remove('d-none');
+  cpUpdateCount();
+}
+
+function cpUpdateCount() {
+  const n = document.querySelectorAll('#cp-tbody .cp-chk:checked').length;
+  document.getElementById('cp-selected-count').textContent = `${n} nhân viên được chọn`;
+}
+
+async function cpExecute() {
+  const madm = document.getElementById('cp-dinhmuc-select').value;
+  const ngct = document.getElementById('cp-ngay-input').value;
+  const mapb = document.getElementById('cp-mapb-select').value;
+
+  if (!madm) { showToast('Vui lòng chọn định mức', 'warning'); return; }
+  if (!ngct) { showToast('Vui lòng chọn ngày cấp', 'warning'); return; }
+
+  const checkedBoxes = document.querySelectorAll('#cp-tbody .cp-chk:checked');
+  if (checkedBoxes.length === 0) { showToast('Chưa chọn nhân viên nào', 'warning'); return; }
+
+  // Lấy danh sách vật tư từ định mức
+  const dm = (State.dinhMucData || []).find(d => d.madm === madm);
+  const vattu = (dm?.chitiet || []).map(ct => ({ mavt: ct.mavt, dmtg: ct.dmtg || 0 }));
+  if (vattu.length === 0) { showToast('Định mức này chưa có vật tư', 'warning'); return; }
+
+  const btn = document.getElementById('cp-execute-btn');
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+
+  const ym = ngct.substring(0, 7);
+  let successCount = 0, errorCount = 0;
+  const total = checkedBoxes.length;
+
+  for (let i = 0; i < checkedBoxes.length; i++) {
+    const cb = checkedBoxes[i];
+    const idx = parseInt(cb.dataset.idx);
+    const emp = cpEmployeeList[idx];
+    if (!emp) continue;
+
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý ${i + 1}/${total}...`;
+    const resultEl = document.getElementById(`cp-result-${emp.manv}`);
+    if (resultEl) resultEl.innerHTML = '<span class="badge bg-secondary">Đang xử lý...</span>';
+
+    const manvFmt = /^\d{4}$/.test(emp.manv) ? '0' + emp.manv : emp.manv;
+    const mact = `${ym}-${mapb}-${manvFmt}`;
+
+    try {
+      const res = await API.allocateFirst({ mact, manv: emp.manv, ngct, mapb, madm, vattu });
+      if (res.success) {
+        successCount++;
+        if (resultEl) resultEl.innerHTML = `<span class="badge bg-success">✓ Đã cấp (${res.data?.allocated || 0} VT)</span>`;
+      } else {
+        errorCount++;
+        if (resultEl) resultEl.innerHTML = `<span class="badge bg-danger" title="${escHtml(res.message || '')}">✗ Lỗi</span>`;
+      }
+    } catch (err) {
+      errorCount++;
+      if (resultEl) resultEl.innerHTML = `<span class="badge bg-danger" title="${escHtml(err.message)}">✗ Lỗi</span>`;
+    }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = origText;
+  showToast(`Hoàn tất: ${successCount} thành công${errorCount ? ', ' + errorCount + ' lỗi' : ''}`,
+    errorCount === 0 ? 'success' : successCount > 0 ? 'warning' : 'danger');
 }
 
 // ====================================================================

@@ -41,6 +41,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" data-tab="capphat" href="#">
+        <i class="bi bi-person-check me-1"></i>Cấp Phát
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" data-tab="reports">
         <i class="bi bi-bar-chart-line me-1"></i>Báo Cáo
       </a>
@@ -203,6 +208,93 @@
       <div id="emp-empty" class="text-center py-5 d-none">
         <i class="bi bi-people fs-1 text-muted"></i>
         <p class="text-muted mt-2">Không có nhân viên</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: CẤP PHÁT THEO ĐỘI -->
+<div id="tab-capphat" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center gap-2">
+          <i class="bi bi-person-check fs-5 text-success"></i>
+          <span class="fw-semibold">Cấp phát theo đội</span>
+        </div>
+        <div class="card-body">
+          <!-- Bộ lọc -->
+          <div class="row g-2 mb-3 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label form-label-sm fw-semibold mb-1">Phòng ban</label>
+              <select class="form-select form-select-sm" id="cp-mapb-select">
+                <option value="">-- Chọn phòng ban --</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label form-label-sm fw-semibold mb-1">Định mức áp dụng</label>
+              <select class="form-select form-select-sm" id="cp-dinhmuc-select">
+                <option value="">-- Chọn định mức --</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label form-label-sm fw-semibold mb-1">Ngày cấp</label>
+              <input type="date" class="form-control form-control-sm" id="cp-ngay-input">
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+              <button class="btn btn-primary btn-sm" id="cp-load-btn">
+                <i class="bi bi-people me-1"></i>Tải nhân viên
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview vật tư theo định mức -->
+          <div id="cp-vattu-preview" class="mb-3 d-none">
+            <div class="fw-semibold small text-muted mb-1">Vật tư sẽ cấp:</div>
+            <div id="cp-vattu-badges" class="d-flex flex-wrap gap-1"></div>
+          </div>
+
+          <!-- Loading -->
+          <div id="cp-loading" class="text-center py-4 d-none">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted small">Đang tải...</div>
+          </div>
+
+          <!-- Bảng nhân viên -->
+          <div id="cp-table-wrap" class="d-none">
+            <div class="d-flex align-items-center gap-3 mb-2">
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="cp-check-all" checked>
+                <label class="form-check-label fw-semibold small" for="cp-check-all">Chọn tất cả</label>
+              </div>
+              <span class="text-muted small" id="cp-selected-count">0 nhân viên</span>
+              <button class="btn btn-success btn-sm ms-auto" id="cp-execute-btn">
+                <i class="bi bi-person-check me-1"></i>Cấp phát cho đã chọn
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th style="width:40px"><i class="bi bi-check2-square"></i></th>
+                    <th>Mã NV</th>
+                    <th>Họ tên</th>
+                    <th>Mã PB</th>
+                    <th>Định mức NV</th>
+                    <th class="text-center">Kết quả</th>
+                  </tr>
+                </thead>
+                <tbody id="cp-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Empty -->
+          <div id="cp-empty" class="text-center py-5 d-none">
+            <i class="bi bi-people fs-1 text-muted"></i>
+            <p class="text-muted mt-2">Không có nhân viên trong phòng ban này</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
