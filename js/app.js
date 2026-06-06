@@ -1899,7 +1899,7 @@ async function loadAllocateList(manv) {
   document.getElementById('alloc-check-all').checked = false;
   updateAllocBulkBtn();
   try {
-    const certsRes = await API.getCertificates({ manv });
+    const certsRes = await API.getCertificates({ manv, to_date: document.getElementById('alloc-date').value || today() });
     if (!certsRes.success || !certsRes.data?.length) {
       document.getElementById('alloc-empty').classList.remove('d-none');
       return;
