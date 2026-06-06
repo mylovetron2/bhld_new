@@ -143,6 +143,12 @@ const API = {
       body: JSON.stringify({ mact, mavt, ngnhan }),
     });
   },
+  allocateFirst({ mact, manv, ngct, mapb, madm, vattu }) {
+    return apiFetch('/allocate_first.php', {
+      method: 'POST',
+      body: JSON.stringify({ mact, manv, ngct, mapb, madm, vattu }),
+    });
+  },
   deallocate(mact, mavt) {
     return apiFetch('/deallocate_v2.php', {
       method: 'POST',

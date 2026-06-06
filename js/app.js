@@ -1032,33 +1032,20 @@ async function saveEmployee() {
       const manvFmt = /^\d{4}$/.test(emp.manv) ? '0' + emp.manv : emp.manv;
       const ym = ngct.substring(0, 7);
       const mact = `${ym}-${emp.mapb}-${manvFmt}`;
-      const ctRes = await API.createCertificate({ mact, manv: emp.manv, ngct, mapb: emp.mapb, madm: dinhmuc });
-      if (ctRes.success) {
-        const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
-        const slMap = {};
-        slInputs.forEach(inp => { slMap[inp.dataset.mavt] = { sl: parseInt(inp.value)||0, dmtg: parseInt(inp.dataset.dmtg)||0 }; });
-
-        const dm = State.dinhMucData.find(d => d.madm === dinhmuc);
-        let count = 0;
-        if (dm?.chitiet?.length) {
-          for (const r of dm.chitiet) {
-            const override = slMap[r.mavt];
-            const qty = override ? override.sl : 1;
-            if (qty <= 0) continue;
-            const dmtg = parseInt(r.dmtg) || 0;
-            // Bước 1: tạo dòng vật tư sl=0
-            await API.createCertificateDetail({
-              mact, mavt: r.mavt, sl: 0, dmtg,
-              ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
-            });
-            // Bước 2: cấp phát → tự động tạo CT kỳ tiếp theo
-            await API.allocate(mact, r.mavt, ngct);
-            count++;
-          }
-        }
-        showToast(`Đã tạo CT ${mact} và cấp phát ${count} vật tư`, 'success');
+      const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
+      const vattu = [];
+      slInputs.forEach(inp => {
+        const qty = parseInt(inp.value) || 0;
+        if (qty > 0) vattu.push({ mavt: inp.dataset.mavt, dmtg: parseInt(inp.dataset.dmtg)||0 });
+      });
+      if (vattu.length === 0) { showToast('Vui lòng chọn ít nhất 1 vật tư (SL > 0)', 'warning'); btn.disabled = false; return; }
+      const allocRes = await API.allocateFirst({ mact, manv: emp.manv, ngct, mapb: emp.mapb, madm: dinhmuc, vattu });
+      if (allocRes.success) {
+        showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư`, 'success');
         getModal('empModal').hide();
       } else {
+        showToast('Lỗi: ' + (allocRes.message||''), 'danger');
+      }
         showToast('Tạo CT thất bại: ' + (ctRes.message || ''), 'danger');
       }
     } catch (err) {
@@ -1093,37 +1080,22 @@ async function saveEmployee() {
         const manvFmt = /^\d{4}$/.test(manv) ? '0' + manv : manv;
         const mact = `${ym}-${mapb}-${manvFmt}`;
         try {
-          const ctRes = await API.createCertificate({ mact, manv, ngct, mapb, madm: dinhmuc });
-          if (ctRes.success) {
-            const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
-            const slMap = {};
-            slInputs.forEach(inp => { slMap[inp.dataset.mavt] = { sl: parseInt(inp.value)||0, dmtg: parseInt(inp.dataset.dmtg)||0 }; });
-
-            const dm = State.dinhMucData.find(d => d.madm === dinhmuc);
-            let count = 0;
-            if (dm?.chitiet?.length) {
-              for (const r of dm.chitiet) {
-                const override = slMap[r.mavt];
-                const qty = override ? override.sl : 1;
-                if (qty <= 0) continue;
-                const dmtg = parseInt(r.dmtg) || 0;
-                // Bước 1: tạo dòng vật tư sl=0
-                await API.createCertificateDetail({
-                  mact, mavt: r.mavt, sl: 0, dmtg,
-                  ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
-                });
-                // Bước 2: cấp phát → tự động tạo CT kỳ tiếp theo
-                await API.allocate(mact, r.mavt, ngct);
-                count++;
-              }
+          const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
+          const vattu = [];
+          slInputs.forEach(inp => {
+            const qty = parseInt(inp.value) || 0;
+            if (qty > 0) vattu.push({ mavt: inp.dataset.mavt, dmtg: parseInt(inp.dataset.dmtg)||0 });
+          });
+          try {
+            const allocRes = await API.allocateFirst({ mact, manv, ngct, mapb, madm: dinhmuc, vattu });
+            if (allocRes.success) {
+              showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư`, 'success');
+            } else {
+              showToast('Lưu NV OK nhưng cấp phát lỗi: ' + (allocRes.message||''), 'warning');
             }
-            showToast(`Đã tạo CT ${mact} và cấp phát ${count} vật tư`, 'success');
-          } else {
-            showToast('Lưu NV OK nhưng tạo CT thất bại: ' + (ctRes.message || ''), 'warning');
+          } catch (ctErr) {
+            showToast('Lưu NV OK nhưng lỗi tạo CT: ' + ctErr.message, 'warning');
           }
-        } catch (ctErr) {
-          showToast('Lưu NV OK nhưng lỗi tạo CT: ' + ctErr.message, 'warning');
-        }
       } else {
         showToast('Thêm nhân viên thành công!', 'success');
       }
