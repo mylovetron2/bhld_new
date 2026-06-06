@@ -1074,26 +1074,21 @@ async function saveEmployee() {
       const createCt = !isEdit && document.getElementById('emp-create-ct-check')?.checked;
       if (createCt && dinhmuc) {
         const ngct = document.getElementById('emp-first-ct-date').value || today();
-        const ym = ngct.substring(0, 7); // YYYY-MM
+        const ym = ngct.substring(0, 7);
         const manvFmt = /^\d{4}$/.test(manv) ? '0' + manv : manv;
         const mact = `${ym}-${mapb}-${manvFmt}`;
-        try {
-          const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
-          const vattu = [];
-          slInputs.forEach(inp => {
-            const qty = parseInt(inp.value) || 0;
-            if (qty > 0) vattu.push({ mavt: inp.dataset.mavt, dmtg: parseInt(inp.dataset.dmtg)||0 });
-          });
-          try {
-            const allocRes = await API.allocateFirst({ mact, manv, ngct, mapb, madm: dinhmuc, vattu });
-            if (allocRes.success) {
-              showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư`, 'success');
-            } else {
-              showToast('Lưu NV OK nhưng cấp phát lỗi: ' + (allocRes.message||''), 'warning');
-            }
-          } catch (ctErr) {
-            showToast('Lưu NV OK nhưng lỗi tạo CT: ' + ctErr.message, 'warning');
-          }
+        const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
+        const vattu = [];
+        slInputs.forEach(inp => {
+          const qty = parseInt(inp.value) || 0;
+          if (qty > 0) vattu.push({ mavt: inp.dataset.mavt, dmtg: parseInt(inp.dataset.dmtg)||0 });
+        });
+        const allocRes = await API.allocateFirst({ mact, manv, ngct, mapb, madm: dinhmuc, vattu });
+        if (allocRes.success) {
+          showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư`, 'success');
+        } else {
+          showToast('Lưu NV OK nhưng cấp phát lỗi: ' + (allocRes.message||''), 'warning');
+        }
       } else {
         showToast('Thêm nhân viên thành công!', 'success');
       }
