@@ -1813,6 +1813,9 @@ async function initAllocateTab() {
     allocInitialized = true;
     document.getElementById('alloc-date').value = today();
     document.getElementById('alloc-pb-filter').addEventListener('change', renderAllocEmpList);
+    document.getElementById('alloc-date').addEventListener('change', () => {
+      if (allocCurrentManv) loadAllocateList(allocCurrentManv);
+    });
     document.getElementById('alloc-bulk-btn').addEventListener('click', doAllocateBulk);
     document.getElementById('alloc-check-all').addEventListener('change', e => {
       document.querySelectorAll('.alloc-row-check').forEach(cb => {
