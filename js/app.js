@@ -1833,9 +1833,12 @@ async function loadAllocSidebar() {
   // Populate PB filter
   const pbSel = document.getElementById('alloc-pb-filter');
   const curPb = pbSel.value;
-  const pbs = [...new Set((State.employees || []).map(e => e.mapb).filter(Boolean))].sort();
+  // Build unique pb list with both mapb (value) and tenphongban (label)
+  const pbMap = {};
+  (State.employees || []).forEach(e => { if (e.mapb) pbMap[e.mapb] = e.tenphongban || e.mapb; });
+  const pbEntries = Object.entries(pbMap).sort((a, b) => a[1].localeCompare(b[1]));
   pbSel.innerHTML = '<option value="">-- Tất cả đội --</option>';
-  pbs.forEach(pb => pbSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(pb)}">${escHtml(pb)}</option>`));
+  pbEntries.forEach(([mapb, ten]) => pbSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(mapb)}">${escHtml(ten)}</option>`));
   pbSel.value = curPb;
   renderAllocEmpList();
 }
@@ -1847,7 +1850,7 @@ function renderAllocEmpList() {
   // Group by phong ban
   const groups = {};
   filtered.forEach(emp => {
-    const dept = emp.mapb || 'Chưa phân loại';
+    const dept = emp.tenphongban || emp.mapb || 'Chưa phân loại';
     if (!groups[dept]) groups[dept] = [];
     groups[dept].push(emp);
   });
