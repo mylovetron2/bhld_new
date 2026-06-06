@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Monthly Report API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 14px;
+        }
+        #result {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Test Monthly Report API</h1>
+    
+    <div class="container">
+        <h3>Test API Endpoint</h3>
+        <label>Tháng (MM/yyyy):</label>
+        <input type="text" id="monthInput" value="01/2026" placeholder="MM/yyyy">
+        <button onclick="testAPI()">Test API</button>
+        <button onclick="testCurrentMonth()">Test Tháng Hiện Tại</button>
+    </div>
+
+    <div class="container">
+        <h3>Kết quả:</h3>
+        <div id="status"></div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function testAPI() {
+            const month = document.getElementById('monthInput').value;
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+            
+            statusDiv.innerHTML = '<span class="info">Đang gọi API...</span>';
+            resultDiv.innerHTML = '';
+
+            try {
+                const url = `http://diavatly.com/BHLD/api/monthly_report.php?month=${encodeURIComponent(month)}`;
+                console.log('Calling:', url);
+                
+                const response = await fetch(url);
+                
+                statusDiv.innerHTML = `
+                    <span class="${response.ok ? 'success' : 'error'}">
+                        HTTP Status: ${response.status} ${response.statusText}
+                    </span>
+                `;
+
+                const data = await response.json();
+                resultDiv.innerHTML = JSON.stringify(data, null, 2);
+
+                if (data.success) {
+                    console.log('Success! Departments:', data.departments?.length);
+                } else {
+                    console.error('API Error:', data.message);
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="error">Lỗi: ${error.message}</span>`;
+                resultDiv.innerHTML = error.stack;
+                console.error('Error:', error);
+            }
+        }
+
+        function testCurrentMonth() {
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const year = now.getFullYear();
+            document.getElementById('monthInput').value = `${month}/${year}`;
+            testAPI();
+        }
+
+        // Auto test on load
+        window.onload = function() {
+            testCurrentMonth();
+        };
+    </script>
+</body>
+</html>

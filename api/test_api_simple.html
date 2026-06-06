@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Monthly Report API</title>
+</head>
+<body>
+    <h1>Test Monthly Report API</h1>
+    <button onclick="testAPI()">Test API (01/2026)</button>
+    <div id="result" style="margin-top:20px;white-space:pre;font-family:monospace;"></div>
+
+    <script>
+    function testAPI() {
+        const resultDiv = document.getElementById('result');
+        resultDiv.textContent = 'Loading...';
+        
+        fetch('http://diavatly.com/BHLD/api/monthly_report.php?month=01/2026')
+            .then(response => {
+                resultDiv.textContent = `Status: ${response.status} ${response.statusText}\n\n`;
+                return response.text();
+            })
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    resultDiv.textContent += JSON.stringify(data, null, 2);
+                } catch (e) {
+                    resultDiv.textContent += 'Raw response:\n' + text;
+                }
+            })
+            .catch(error => {
+                resultDiv.textContent = 'Error: ' + error.message;
+            });
+    }
+    
+    // Auto test
+    testAPI();
+    </script>
+</body>
+</html>

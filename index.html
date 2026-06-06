@@ -1,0 +1,619 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BHLD - Bảo Hộ Lao Động</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/app.css" rel="stylesheet" />
+</head>
+<body>
+
+<!-- ===== NAVBAR ===== -->
+<nav class="navbar navbar-expand-lg navbar-dark" id="appNavbar">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+      <i class="bi bi-shield-check fs-5"></i>
+      <span class="fw-bold">BHLD</span>
+      <span class="d-none d-sm-inline text-white-50 small">Bảo Hộ Lao Động</span>
+    </a>
+    <span class="ms-auto text-white-50 small d-none d-md-inline" id="navClock"></span>
+  </div>
+</nav>
+
+<!-- ===== TABS ===== -->
+<div class="container-fluid px-0">
+  <ul class="nav nav-tabs main-tabs px-3 pt-2" id="mainTabs">
+    <li class="nav-item">
+      <a class="nav-link active" data-tab="certificates" href="#">
+        <i class="bi bi-file-earmark-text me-1"></i>Chứng Từ
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-tab="management" href="#">
+        <i class="bi bi-folder2-open me-1"></i>Quản Lý
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-tab="employees" href="#">
+        <i class="bi bi-people me-1"></i>Nhân Viên
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-tab="reports">
+        <i class="bi bi-bar-chart-line me-1"></i>Báo Cáo
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-tab="changelog" href="#">
+        <i class="bi bi-clock-history me-1"></i>Lịch sử
+      </a>
+    </li>
+  </ul>
+</div>
+
+<!-- ===== TAB CONTENT ===== -->
+
+<!-- TAB 1: CHỨNG TỪ -->
+<div id="tab-certificates" class="tab-panel container-fluid py-3 px-4">
+  <div class="row g-3">
+    <!-- Filter Bar -->
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body py-2">
+          <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div style="min-width:160px;flex:2">
+              <label class="form-label small text-muted mb-1">Nhân viên</label>
+              <select class="form-select form-select-sm" id="ct-emp-select">
+                <option value="">-- Tất cả nhân viên --</option>
+              </select>
+            </div>
+            <div style="min-width:140px;flex:2">
+              <label class="form-label small text-muted mb-1">Mã CT</label>
+              <input type="text" class="form-control form-control-sm" id="ct-mact-search" placeholder="Tìm mã CT..." />
+            </div>
+            <div style="min-width:130px;flex:1">
+              <label class="form-label small text-muted mb-1">Từ ngày</label>
+              <input type="date" class="form-control form-control-sm" id="ct-from-date" />
+            </div>
+            <div style="min-width:130px;flex:1">
+              <label class="form-label small text-muted mb-1">Đến ngày</label>
+              <input type="date" class="form-control form-control-sm" id="ct-to-date" />
+            </div>
+            <div class="d-flex gap-1">
+              <button class="btn btn-primary btn-sm" id="ct-search-btn">
+                <i class="bi bi-search me-1"></i>Tìm kiếm
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" id="ct-clear-btn">
+                <i class="bi bi-x-circle me-1"></i>Xóa lọc
+              </button>
+            </div>
+            <div class="ms-auto">
+              <button class="btn btn-success btn-sm" id="ct-bulk-allocate-btn" disabled>
+                <i class="bi bi-check2-all me-1"></i>Cấp phát đã chọn (<span id="ct-selected-count">0</span>)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Certificate List -->
+    <div class="col-12">
+      <div id="ct-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">Đang tải...</p>
+      </div>
+      <div id="ct-empty" class="text-center py-5 d-none">
+        <i class="bi bi-inbox fs-1 text-muted"></i>
+        <p class="text-muted mt-2">Không có chứng từ nào</p>
+      </div>
+      <div id="ct-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: QUẢN LÝ -->
+<div id="tab-management" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="input-group input-group-sm" style="max-width:340px">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="mg-search" placeholder="Tìm theo mã CT, mã NV, tên...">
+          <button class="btn btn-outline-secondary" id="mg-search-btn">Tìm</button>
+        </div>
+        <button class="btn btn-primary btn-sm ms-md-auto" id="mg-add-btn">
+          <i class="bi bi-plus-lg me-1"></i>Thêm chứng từ
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="mg-reload-btn">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </div>
+    <div class="col-12">
+      <div id="mg-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+      <div class="table-responsive" id="mg-table-wrap">
+        <table class="table table-hover table-sm align-middle mb-0" id="mg-table">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th>Mã CT</th>
+              <th>Ngày CT</th>
+              <th>Mã NV</th>
+              <th>Họ tên</th>
+              <th>Phòng ban</th>
+              <th>Mã DM</th>
+              <th>Ghi chú</th>
+              <th class="text-end">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="mg-tbody"></tbody>
+        </table>
+      </div>
+      <div id="mg-empty" class="text-center py-5 d-none">
+        <i class="bi bi-inbox fs-1 text-muted"></i>
+        <p class="text-muted mt-2">Không có chứng từ</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 3: NHÂN VIÊN -->
+<div id="tab-employees" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="input-group input-group-sm" style="max-width:340px">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="emp-search" placeholder="Tìm mã NV, tên...">
+          <button class="btn btn-outline-secondary" id="emp-search-btn">Tìm</button>
+        </div>
+        <select class="form-select form-select-sm" id="emp-pb-filter" style="max-width:220px">
+          <option value="">-- Tất cả phòng ban --</option>
+        </select>
+        <button class="btn btn-primary btn-sm ms-md-auto" id="emp-add-btn">
+          <i class="bi bi-person-plus me-1"></i>Thêm NV
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="emp-reload-btn">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </div>
+    <div class="col-12">
+      <div id="emp-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+      <div class="table-responsive" id="emp-table-wrap">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th>Mã NV</th>
+              <th>Họ tên</th>
+              <th>Mã PB</th>
+              <th>Phòng ban</th>
+              <th>Định mức</th>
+              <th class="text-end">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="emp-tbody"></tbody>
+        </table>
+      </div>
+      <div id="emp-empty" class="text-center py-5 d-none">
+        <i class="bi bi-people fs-1 text-muted"></i>
+        <p class="text-muted mt-2">Không có nhân viên</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 4: BÁO CÁO -->
+<div id="tab-reports" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body py-2">
+          <div class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small text-muted mb-1">Tháng</label>
+              <select class="form-select form-select-sm" id="rpt-month" style="width:80px">
+                <option value="01">01</option><option value="02">02</option>
+                <option value="03">03</option><option value="04">04</option>
+                <option value="05">05</option><option value="06">06</option>
+                <option value="07">07</option><option value="08">08</option>
+                <option value="09">09</option><option value="10">10</option>
+                <option value="11">11</option><option value="12">12</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label small text-muted mb-1">Năm</label>
+              <select class="form-select form-select-sm" id="rpt-year" style="width:100px"></select>
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-primary btn-sm" id="rpt-load-btn">
+                <i class="bi bi-search me-1"></i>Xem báo cáo
+              </button>
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-outline-success btn-sm" id="rpt-print-btn">
+                <i class="bi bi-printer me-1"></i>In báo cáo
+              </button>
+              <button class="btn btn-outline-primary btn-sm ms-1" id="rpt-print-total-btn">
+                <i class="bi bi-file-earmark-bar-graph me-1"></i>In tổng
+              </button>
+              <button class="btn btn-outline-secondary btn-sm ms-1" id="rpt-export-word-btn">
+                <i class="bi bi-file-earmark-word me-1"></i>Xuất Word
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div id="rpt-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+      <div id="rpt-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 5: LỊCH SỬ THAY ĐỔI -->
+<div id="tab-changelog" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body py-2">
+          <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div style="min-width:160px">
+              <label class="form-label small text-muted mb-1">Bảng</label>
+              <select class="form-select form-select-sm" id="cl-table">
+                <option value="bhld_ctu">bhld_ctu (Chứng từ)</option>
+                <option value="bhld_ctctu">bhld_ctctu (Chi tiết CT)</option>
+              </select>
+            </div>
+            <div style="min-width:160px">
+              <label class="form-label small text-muted mb-1">Record ID</label>
+              <input type="text" class="form-control form-control-sm" id="cl-id" placeholder="Mã chứng từ..." />
+            </div>
+            <div style="min-width:130px">
+              <label class="form-label small text-muted mb-1">Loại thao tác</label>
+              <select class="form-select form-select-sm" id="cl-action">
+                <option value="">Tất cả</option>
+                <option value="INSERT">INSERT</option>
+                <option value="UPDATE">UPDATE</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+            </div>
+            <div style="min-width:100px">
+              <label class="form-label small text-muted mb-1">Hiển thị</label>
+              <select class="form-select form-select-sm" id="cl-limit">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+              </select>
+            </div>
+            <div style="min-width:130px">
+              <label class="form-label small text-muted mb-1">Từ ngày</label>
+              <input type="date" class="form-control form-control-sm" id="cl-from-date" />
+            </div>
+            <div style="min-width:130px">
+              <label class="form-label small text-muted mb-1">Đến ngày</label>
+              <input type="date" class="form-control form-control-sm" id="cl-to-date" />
+            </div>
+            <div class="d-flex gap-1">
+              <button class="btn btn-primary btn-sm" id="cl-search-btn">
+                <i class="bi bi-search me-1"></i>Lọc
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" id="cl-clear-btn">
+                <i class="bi bi-x-circle me-1"></i>Xóa lọc
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div id="cl-loading" class="text-center py-4 d-none">
+        <div class="spinner-border text-primary"></div>
+      </div>
+      <div id="cl-stats" class="text-muted small mb-2"></div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle" id="cl-table-el">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th>STT</th>
+              <th>Record ID</th>
+              <th>Thao tác</th>
+              <th>Thời gian</th>
+              <th>Trường thay đổi</th>
+              <th>Dữ liệu</th>
+            </tr>
+          </thead>
+          <tbody id="cl-tbody"></tbody>
+        </table>
+      </div>
+      <div id="cl-empty" class="text-center py-4 text-muted d-none">Không có dữ liệu</div>
+      <div id="cl-pagination" class="d-flex justify-content-center gap-1 mt-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Cấp phát / Trả thiết bị -->
+<div class="modal fade" id="allocateModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="allocateModalTitle">Cấp phát thiết bị</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="allocateModalBody">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Ngày nhận</label>
+          <input type="date" class="form-control" id="allocate-date" />
+        </div>
+        <div id="allocate-info" class="alert alert-info py-2 small"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-success" id="allocate-confirm-btn">
+          <i class="bi bi-check-lg me-1"></i>Xác nhận cấp phát
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Cấp phát hàng loạt -->
+<div class="modal fade" id="bulkAllocateModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Cấp phát hàng loạt</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Ngày nhận chung</label>
+          <input type="date" class="form-control" id="bulk-alloc-date" />
+        </div>
+        <div id="bulk-alloc-list" class="mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-success" id="bulk-alloc-confirm-btn">
+          <i class="bi bi-check2-all me-1"></i>Cấp phát tất cả
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Thêm/Sửa Chứng Từ -->
+<div class="modal fade" id="certModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="certModalTitle">Thêm chứng từ</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Mã chứng từ <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="cert-mact" placeholder="VD: 2024-01-P01-001" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Mã nhân viên <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="cert-manv" placeholder="VD: NV001" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Ngày chứng từ <span class="text-danger">*</span></label>
+          <input type="date" class="form-control" id="cert-ngct" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Mã phòng ban <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="cert-mapb" placeholder="VD: P01" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Mã danh mục <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="cert-madm" placeholder="VD: M1, DM001..." />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Ghi chú</label>
+          <textarea class="form-control" id="cert-ghichu" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" id="cert-save-btn">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Quản lý chi tiết chứng từ -->
+<div class="modal fade" id="certDetailMgmtModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="certDetailMgmtTitle">Chi tiết chứng từ</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span id="certDetailMgmtInfo" class="text-muted small"></span>
+          <button class="btn btn-success btn-sm" id="cdm-add-btn">
+            <i class="bi bi-plus-lg me-1"></i>Thêm vật tư
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Vật tư</th>
+                <th>ĐVT</th>
+                <th>Định mức TG</th>
+                <th>SL</th>
+                <th>Ngày nhận (kế hoạch)</th>
+                <th>Ngày nhận thực tế</th>
+                <th>Trạng thái</th>
+                <th class="text-end">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="cdm-tbody"></tbody>
+          </table>
+        </div>
+        <div id="cdm-loading" class="text-center py-3 d-none">
+          <div class="spinner-border spinner-border-sm text-primary"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Thêm/sửa vật tư trong chứng từ -->
+<div class="modal fade" id="certDetailItemModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cdiModalTitle">Thêm vật tư</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Vật tư <span class="text-danger">*</span></label>
+          <select class="form-select" id="cdi-mavt"></select>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label">Định mức thời gian (tháng)</label>
+            <input type="number" class="form-control" id="cdi-dmtg" min="0" value="12" />
+          </div>
+          <div class="col-6">
+            <label class="form-label">Số lượng</label>
+            <input type="number" class="form-control" id="cdi-sl" min="0" value="1" />
+          </div>
+        </div>
+        <div class="row g-2 mt-1">
+          <div class="col-6">
+            <label class="form-label">Ngày nhận (kế hoạch)</label>
+            <input type="date" class="form-control" id="cdi-ngnhan" />
+          </div>
+          <div class="col-6">
+            <label class="form-label">Ngày nhận thực tế</label>
+            <input type="date" class="form-control" id="cdi-ngnhantt" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" id="cdi-save-btn">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Thêm/Sửa nhân viên -->
+<div class="modal fade" id="empModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="empModalTitle">Thêm nhân viên</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Mã nhân viên <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="emp-manv-input" placeholder="VD: NV001" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Họ tên <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="emp-ten-input" placeholder="Nguyễn Văn A" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Mã phòng ban <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="emp-mapb-input" placeholder="VD: P01" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Định mức</label>
+          <input type="text" class="form-control" id="emp-dinhmuc-input" placeholder="VD: M1" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" id="emp-save-btn">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Lịch sử cấp phát -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="historyModalTitle">Lịch sử cấp phát</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="history-loading" class="text-center py-3 d-none">
+          <div class="spinner-border text-primary"></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Mã CT</th>
+                <th>Vật tư</th>
+                <th class="text-center">SL</th>
+                <th>Ngày nhận KH</th>
+                <th>Ngày nhận TT</th>
+                <th>Định mức TG</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+        <div id="history-empty" class="text-center py-3 d-none text-muted">Không có lịch sử</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Xác nhận xóa -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Xác nhận xóa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-1">
+        <p id="confirmModalMsg" class="mb-0"></p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-danger btn-sm" id="confirmModalOk">Xóa</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

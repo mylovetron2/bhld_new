@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Allocate API</title>
+    <style>
+        body { font-family: Arial; padding: 20px; max-width: 800px; margin: 0 auto; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 10px 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        input { padding: 8px; width: 300px; margin: 5px; }
+        label { display: inline-block; width: 120px; }
+    </style>
+</head>
+<body>
+    <h1>Test Allocate API</h1>
+    
+    <div>
+        <label>Mã chứng từ:</label>
+        <input type="text" id="mact" value="2013-04-P07-16655">
+    </div>
+    <div>
+        <label>Mã vật tư:</label>
+        <input type="number" id="mavt" value="500120">
+    </div>
+    <div>
+        <label>Ngày nhận:</label>
+        <input type="date" id="ngnhan" value="2025-12-30">
+    </div>
+    
+    <button onclick="testAllocate()">Cấp phát</button>
+    <button onclick="testPing()">Test Ping</button>
+    <button onclick="clearResult()">Xóa kết quả</button>
+    
+    <h2>Kết quả:</h2>
+    <div id="result"></div>
+    
+    <script>
+        async function testAllocate() {
+            const mact = document.getElementById('mact').value;
+            const mavt = parseInt(document.getElementById('mavt').value);
+            const ngnhan = document.getElementById('ngnhan').value;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>Đang gửi request...</p>';
+            
+            const body = { mact, mavt, ngnhan };
+            
+            try {
+                const response = await fetch('http://localhost/BHLD/api/allocate_v2.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                let html = `<p class="${data.success ? 'success' : 'error'}">`;
+                html += `<strong>Status:</strong> ${response.status}<br>`;
+                html += `<strong>Success:</strong> ${data.success}<br>`;
+                html += `<strong>Message:</strong> ${data.message}`;
+                html += `</p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        function clearResult() {
+            document.getElementById('result').innerHTML = '';
+        }
+        
+        async function testPing() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>Testing PHP server...</p>';
+            
+            try {
+                const response = await fetch('http://localhost/BHLD/api/test_ping.php');
+                const data = await response.json();
+                
+                let html = `<p class="success"><strong>Server OK!</strong></p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">ERROR: ${error.message}<br>XAMPP có thể chưa chạy. Hãy mở XAMPP Control Panel và Start Apache + MySQL</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

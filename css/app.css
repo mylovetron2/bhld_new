@@ -1,0 +1,268 @@
+﻿/* ===== BHLD Web App Styles ===== */
+
+:root {
+  --primary: #1565c0;
+  --primary-light: #1976d2;
+  --accent: #26c6da;
+  --surface: #f8f9fa;
+  --border: #dee2e6;
+}
+
+/* ===== GLOBAL ===== */
+body {
+  background-color: #f0f2f5;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 0.875rem;
+}
+
+/* ===== NAVBAR ===== */
+#appNavbar {
+  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  min-height: 52px;
+}
+
+/* ===== TABS ===== */
+.main-tabs {
+  background: white;
+  border-bottom: 2px solid var(--border);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.main-tabs .nav-link {
+  color: #555;
+  font-weight: 500;
+  padding: 0.6rem 1.1rem;
+  border-radius: 0;
+  border: none;
+  border-bottom: 3px solid transparent;
+  transition: all 0.15s;
+}
+
+.main-tabs .nav-link:hover {
+  color: var(--primary-light);
+  background: rgba(25, 118, 210, 0.05);
+}
+
+.main-tabs .nav-link.active {
+  color: var(--primary);
+  font-weight: 600;
+  border-bottom: 3px solid var(--primary);
+  background: transparent;
+}
+
+/* ===== PANELS ===== */
+.tab-panel {
+  min-height: calc(100vh - 116px);
+}
+
+/* ===== CARD OVERRIDES ===== */
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.card-header {
+  border-radius: 10px 10px 0 0 !important;
+  font-size: 0.875rem;
+}
+
+/* ===== CERT CARD ===== */
+.cert-card {
+  transition: box-shadow 0.15s;
+}
+
+.cert-card:hover {
+  box-shadow: 0 4px 16px rgba(21, 101, 192, 0.12) !important;
+}
+
+.cert-card-header {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f8fbff 100%);
+  padding: 0.75rem 1rem;
+}
+
+.cert-detail-table {
+  font-size: 0.83rem;
+}
+
+.cert-detail-table thead th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+}
+
+/* ===== TABLE ===== */
+.table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #555;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table-hover tbody tr:hover {
+  background-color: rgba(25, 118, 210, 0.04);
+}
+
+/* ===== BUTTONS ===== */
+.btn-primary {
+  background: var(--primary-light);
+  border-color: var(--primary-light);
+}
+
+.btn-primary:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* ===== BADGE OVERRIDES ===== */
+.badge {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ===== MODAL ===== */
+.modal-content {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 1rem 1.25rem 0.75rem;
+}
+
+.modal-footer {
+  border-top: 1px solid #f0f0f0;
+  padding: 0.75rem 1.25rem;
+}
+
+/* ===== FORM ===== */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
+}
+
+.form-label {
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: #444;
+}
+
+/* ===== INPUT GROUP ===== */
+.input-group-text {
+  background: #f8f9fa;
+  color: #888;
+}
+
+/* ===== SPINNER ===== */
+.spinner-border {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* ===== TOAST ===== */
+.toast {
+  font-size: 0.875rem;
+  border-radius: 8px;
+  min-width: 260px;
+}
+
+/* ===== STICKY HEADER ===== */
+.table .sticky-top {
+  top: 0;
+  z-index: 1;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* ===== SCROLLABLE TABLE CONTAINER ===== */
+.table-responsive {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  border-radius: 8px;
+}
+
+/* ===== REPORT PRINT ===== */
+@media print {
+  #appNavbar,
+  .main-tabs,
+  #tab-certificates,
+  #tab-management,
+  #tab-employees,
+  .rpt-controls,
+  .btn {
+    display: none !important;
+  }
+
+  #tab-reports {
+    display: block !important;
+  }
+
+  #rpt-content .card {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+
+  body {
+    background: white;
+    font-size: 11pt;
+  }
+
+  .table th, .table td {
+    padding: 4px 6px;
+  }
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 576px) {
+  .tab-panel {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .main-tabs .nav-link {
+    padding: 0.5rem 0.65rem;
+    font-size: 0.78rem;
+  }
+
+  .cert-card-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* ===== STATUS COLORS ===== */
+.status-allocated { color: #2e7d32; }
+.status-pending   { color: #e65100; }
+.status-returned  { color: #757575; }
+.status-overdue   { color: #c62828; }
+
+/* ===== EMPTY STATE ===== */
+#ct-empty i,
+#mg-empty i,
+#emp-empty i {
+  opacity: 0.3;
+}

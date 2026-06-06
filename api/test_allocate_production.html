@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Allocate API - Production</title>
+    <style>
+        body { font-family: Arial; padding: 20px; max-width: 800px; margin: 0 auto; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 10px 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+        pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        input { padding: 8px; width: 300px; margin: 5px; }
+        label { display: inline-block; width: 120px; font-weight: bold; }
+        .info { background: #e3f2fd; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Allocate API (Production)</h1>
+    
+    <div class="info">
+        <strong>Server:</strong> http://diavatly.com/BHLD/api/<br>
+        <strong>Mục đích:</strong> Test cấp phát thiết bị trên server thật
+    </div>
+    
+    <div>
+        <label>Mã chứng từ:</label>
+        <input type="text" id="mact" value="2013-04-P07-16655">
+    </div>
+    <div>
+        <label>Mã vật tư:</label>
+        <input type="number" id="mavt" value="500120">
+    </div>
+    <div>
+        <label>Ngày nhận:</label>
+        <input type="date" id="ngnhan" value="2025-12-30">
+    </div>
+    
+    <button onclick="testPing()">1. Test Server</button>
+    <button onclick="checkTriggers()">2. Kiểm tra Triggers</button>
+    <button onclick="viewTriggerDetails()">3. Chi tiết Triggers</button>
+    <button onclick="showCurrentTriggers()">📋 Show Triggers Hiện Tại</button>
+    <button onclick="generateFixedTriggers()">4. Tạo SQL Fix</button>
+    <button onclick="testDebug()">5. Debug Data</button>
+    <button onclick="testMethod()">🔍 Test POST Method</button>
+    <button onclick="testAllocate()">6. Cấp phát (0→1)</button>
+    <button onclick="testAllocateV2Direct()">6v2. Test Allocate V2 Direct</button>
+    <button onclick="testAllocateTest()">6b. Test Allocate (Debug)</button>
+    <button onclick="testDeallocate()">7. Thu hồi (1→0)</button>
+    <button onclick="clearResult()">Xóa kết quả</button>
+    
+    <h2>Kết quả:</h2>
+    <div id="result"></div>
+    
+    <script>
+        const BASE_URL = 'http://diavatly.com/BHLD/api';
+        
+        async function testPing() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">Đang kiểm tra server...</p>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/debug_allocate.php`);
+                const data = await response.json();
+                
+                let html = `<p class="success"><strong>✅ Server OK!</strong></p>`;
+                html += `<p>Có ${data.tests.available_to_allocate.count} thiết bị có thể cấp phát</p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        async function testDebug() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">Đang lấy dữ liệu debug...</p>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/debug_allocate.php`);
+                const data = await response.json();
+                
+                if (data.tests.simulation) {
+                    const sim = data.tests.simulation;
+                    document.getElementById('mact').value = sim.mact;
+                    document.getElementById('mavt').value = sim.mavt;
+                    document.getElementById('ngnhan').value = sim.ngnhan;
+                    
+                    let html = `<p class="success"><strong>✅ Đã điền dữ liệu mẫu</strong></p>`;
+                    html += `<p><strong>SQL sẽ thực thi:</strong></p>`;
+                    html += `<pre>${sim.sql}</pre>`;
+                    
+                    resultDiv.innerHTML = html;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        async function testMethod() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">🔄 Testing POST method...</p>';
+            
+            const testData = { mact: '2013-04-P07-16655', mavt: 500120, ngnhan: '2025-12-30' };
+            
+            try {
+                const response = await fetch(`${BASE_URL}/test_method.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                const data = await response.json();
+                
+                let html = `<p class="${data.method === 'POST' ? 'success' : 'error'}">`;
+                html += `<strong>Method:</strong> ${data.method}<br>`;
+                html += `<strong>Expected:</strong> POST<br>`;
+                html += `<strong>Result:</strong> ${data.method === 'POST' ? '✅ OK' : '❌ FAILED'}`;
+                html += `</p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        async function testAllocate() {
+            const mact = document.getElementById('mact').value;
+            const mavt = parseInt(document.getElementById('mavt').value);
+            const ngnhan = document.getElementById('ngnhan').value;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">🔄 Đang cấp phát thiết bị (0→1)...</p>';
+            
+            const body = { mact, mavt, ngnhan };
+            
+            try {
+                const timestamp = Date.now();
+                const response = await fetch(`${BASE_URL}/allocate_new.php?t=${timestamp}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                let html = `<p class="${data.success ? 'success' : 'error'}">`;
+                html += `<strong>Status:</strong> ${response.status}<br>`;
+                html += `<strong>Success:</strong> ${data.success}<br>`;
+                html += `<strong>Message:</strong> ${data.message}<br>`;
+                if (data.next_period_created) {
+                    html += `<strong>✅ Đã tạo chứng từ kỳ sau:</strong> ${data.next_period_mact}`;
+                }
+                html += `</p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}<br><br>File allocate_final.php chưa được upload lên server!</p>`;
+            }
+        }
+        
+        async function testAllocateV2Direct() {
+            const mact = document.getElementById('mact').value;
+            const mavt = parseInt(document.getElementById('mavt').value);
+            const ngnhan = document.getElementById('ngnhan').value;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">🔄 Testing allocate_v2.php DIRECT...</p>';
+            
+            const body = { mact, mavt, ngnhan };
+            const url = 'http://diavatly.com/BHLD/api/allocate_new.php?direct=1&t=' + Date.now();
+            
+            resultDiv.innerHTML += `<p>Calling: ${url}</p>`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                let html = `<p class="${data.success ? 'success' : 'error'}">`;
+                html += `<strong>Status:</strong> ${response.status}<br>`;
+                html += `<strong>Success:</strong> ${data.success}<br>`;
+                html += `<strong>Message:</strong> ${data.message}<br>`;
+                if (data.message && data.message.includes('v2.0')) {
+                    html += `<strong>✅ API V2.0 CONFIRMED!</strong><br>`;
+                }
+                if (data.data && data.data.next_period) {
+                    html += `<strong>✅ Next Period:</strong> ${JSON.stringify(data.data.next_period)}<br>`;
+                }
+                html += `</p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        async function testAllocateTest() {
+            const mact = document.getElementById('mact').value;
+            const mavt = parseInt(document.getElementById('mavt').value);
+            const ngnhan = document.getElementById('ngnhan').value;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">🔄 Testing allocate_test.php...</p>';
+            
+            const body = { mact, mavt, ngnhan };
+            
+            try {
+                const response = await fetch(`${BASE_URL}/allocate_test2.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                let html = `<p class="${data.success ? 'success' : 'error'}">`;
+                html += `<strong>Status:</strong> ${response.status}<br>`;
+                html += `<strong>Success:</strong> ${data.success}<br>`;
+                html += `<strong>Message:</strong> ${data.message}`;
+                html += `</p>`;
+                
+                if (data.data && data.data.next_period) {
+                    const np = data.data.next_period;
+                    html += `<h3>Next Period Info:</h3>`;
+                    html += `<p>`;
+                    html += `<strong>Step:</strong> ${np.step}<br>`;
+                    html += `<strong>Master Created:</strong> ${np.master_created || false}<br>`;
+                    html += `<strong>Detail Created:</strong> ${np.detail_created || false}<br>`;
+                    html += `<strong>Next MACT:</strong> ${np.mact_next || 'N/A'}`;
+                    html += `</p>`;
+                }
+                
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        async function testDeallocate() {
+            const mact = document.getElementById('mact').value;
+            const mavt = parseInt(document.getElementById('mavt').value);
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">🔄 Đang thu hồi thiết bị (1→0)...</p>';
+            
+            const body = { mact, mavt };
+            
+            try {
+                const response = await fetch(`${BASE_URL}/deallocate_v2.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                let html = `<p class="${data.success ? 'success' : 'error'}">`;
+                html += `<strong>Status:</strong> ${response.status}<br>`;
+                html += `<strong>Success:</strong> ${data.success}<br>`;
+                html += `<strong>Message:</strong> ${data.message}<br>`;
+                if (data.next_period_deleted) {
+                    html += `<strong>✅ Đã xóa chứng từ kỳ sau:</strong> ${data.next_period_mact}`;
+                }
+                html += `</p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}<br><br>File deallocate.php chưa được upload lên server!</p>`;
+            }
+        }
+
+        
+        async function checkTriggers() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">Đang kiểm tra triggers...</p>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/check_triggers.php`);
+                const data = await response.json();
+                
+                let html = `<h3>Triggers trên bảng bhld_ctctu:</h3>`;
+                html += `<p><strong>Số lượng:</strong> ${data.trigger_count}</p>`;
+                html += `<p><strong>Table Engine:</strong> ${data.table_engine}</p>`;
+                
+                if (data.triggers && data.triggers.length > 0) {
+                    html += `<p class="error"><strong>⚠️ CÓ TRIGGER SỬ DỤNG JSON_OBJECT!</strong></p>`;
+                    html += `<p>Các trigger này cần được xóa hoặc sửa:</p>`;
+                    data.triggers.forEach(t => {
+                        html += `<p><strong>${t.name}</strong> (${t.timing} ${t.event})</p>`;
+                    });
+                    
+                    if (data.drop_commands) {
+                        html += `<p><strong>Lệnh để xóa triggers:</strong></p>`;
+                        html += `<pre>${data.drop_commands.join('\n')}</pre>`;
+                    }
+                } else {
+                    html += `<p class="success">✅ Không có trigger nào</p>`;
+                }
+                
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        function showCurrentTriggers() {
+            // Open in new window - try simple test first
+            window.open(`${BASE_URL}/test_triggers.php`, '_blank', 'width=1000,height=700');
+        }
+        
+        async function viewTriggerDetails() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">Đang lấy chi tiết triggers...</p>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/view_trigger_details.php`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    resultDiv.innerHTML = `<p class="error">❌ ERROR: ${data.error}</p>`;
+                    return;
+                }
+                
+                let html = `<h3>Chi tiết ${data.count} Triggers:</h3>`;
+                
+                data.triggers.forEach((trigger, index) => {
+                    html += `<div style="border: 1px solid #ccc; margin: 10px 0; padding: 10px; background: #f9f9f9;">`;
+                    html += `<h4>${index + 1}. ${trigger.name}</h4>`;
+                    html += `<p><strong>Timing:</strong> ${trigger.timing} | <strong>Event:</strong> ${trigger.event}</p>`;
+                    html += `<p><strong>Statement:</strong></p>`;
+                    html += `<pre style="background: white; padding: 10px; overflow-x: auto; font-size: 11px;">`;
+                    html += trigger.statement.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    html += `</pre></div>`;
+                });
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        async function generateFixedTriggers() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">Đang tạo SQL fix triggers...</p>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/generate_fixed_triggers.php`);
+                const sqlText = await response.text();
+                
+                let html = `<h3>✅ SQL Fix Triggers (MySQL 5.6 Compatible)</h3>`;
+                html += `<p class="success" style="background: #dff0d8; padding: 10px; border-radius: 5px;">`;
+                html += `📋 <strong>Hướng dẫn:</strong><br>`;
+                html += `1. Click nút "Copy SQL" bên dưới<br>`;
+                html += `2. Mở phpMyAdmin → Chọn database "bhld_database"<br>`;
+                html += `3. Vào tab "SQL"<br>`;
+                html += `4. Paste và Execute`;
+                html += `</p>`;
+                html += `<button onclick="copyToClipboard()" style="margin: 10px 0; padding: 10px 20px; font-size: 16px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 5px;">📋 Copy SQL</button>`;
+                html += `<pre id="sqlCode" style="background: #2d2d2d; color: #f8f8f2; padding: 15px; overflow-x: auto; font-size: 12px; font-family: Consolas, monospace; border-radius: 5px;">`;
+                html += sqlText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html += `</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        function copyToClipboard() {
+            const sqlCode = document.getElementById('sqlCode').innerText;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                alert('✅ Đã copy SQL vào clipboard!');
+            }).catch(err => {
+                alert('❌ Lỗi copy: ' + err);
+            });
+        }
+        
+        async function testAllocateOld() {
+            const mact = document.getElementById('mact').value;
+            const mavt = parseInt(document.getElementById('mavt').value);
+            const ngnhan = document.getElementById('ngnhan').value;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="warning">Đang test API cũ...</p>';
+            
+            const body = { mact, mavt, ngnhan };
+            
+            try {
+                const response = await fetch(`${BASE_URL}/allocate.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                let html = `<p class="${data.success ? 'success' : 'error'}">`;
+                html += `<strong>Status:</strong> ${response.status}<br>`;
+                html += `<strong>Success:</strong> ${data.success}<br>`;
+                html += `<strong>Message:</strong> ${data.message}`;
+                html += `</p>`;
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+            }
+        }
+        
+        function clearResult() {
+            document.getElementById('result').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

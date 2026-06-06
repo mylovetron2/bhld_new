@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API Allocation History</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .loading { color: orange; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Test API Allocation History</h1>
+    <p id="status" class="loading">Đang test API...</p>
+    <pre id="result"></pre>
+    
+    <script>
+        const startTime = Date.now();
+        const url = 'http://diavatly.com/BHLD/api/allocation_history.php?status=allocated';
+        
+        document.getElementById('status').innerHTML = 'Calling: ' + url;
+        
+        fetch(url)
+            .then(response => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                document.getElementById('status').innerHTML = 
+                    'Response time: ' + elapsed + ' seconds (Status: ' + response.status + ')';
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('status').className = 'success';
+                document.getElementById('status').innerHTML += ' - SUCCESS';
+                document.getElementById('result').textContent = 
+                    JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                document.getElementById('status').className = 'error';
+                document.getElementById('status').innerHTML = 
+                    'ERROR after ' + elapsed + ' seconds: ' + error.message;
+                document.getElementById('result').textContent = error.stack;
+            });
+    </script>
+</body>
+</html>
