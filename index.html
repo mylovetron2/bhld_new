@@ -214,70 +214,63 @@
 </div>
 
 <!-- TAB 4: CẤP PHÁT -->
-<div id="tab-allocate" class="tab-panel container-fluid py-3 px-4 d-none">
-  <div class="row g-3">
-    <!-- Filter Bar -->
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-body py-2">
-          <div class="d-flex flex-wrap gap-2 align-items-end">
-            <div style="min-width:180px;flex:1">
-              <label class="form-label small text-muted mb-1">Phòng ban</label>
-              <select class="form-select form-select-sm" id="alloc-pb-filter">
-                <option value="">-- Tất cả phòng ban --</option>
-              </select>
-            </div>
-            <div style="min-width:220px;flex:2">
-              <label class="form-label small text-muted mb-1">Nhân viên <span class="text-danger">*</span></label>
-              <select class="form-select form-select-sm" id="alloc-emp-select">
-                <option value="">-- Chọn nhân viên --</option>
-              </select>
-            </div>
-            <div style="min-width:140px">
-              <label class="form-label small text-muted mb-1">Ngày cấp phát</label>
-              <input type="date" class="form-control form-control-sm" id="alloc-date" />
-            </div>
-            <div class="d-flex gap-1 align-self-end">
-              <button class="btn btn-primary btn-sm" id="alloc-load-btn">
-                <i class="bi bi-search me-1"></i>Tải danh sách
-              </button>
-            </div>
-            <div class="ms-auto align-self-end">
-              <button class="btn btn-success btn-sm" id="alloc-bulk-btn" disabled>
-                <i class="bi bi-check2-all me-1"></i>Cấp phát đã chọn (<span id="alloc-selected-count">0</span>)
-              </button>
-            </div>
-          </div>
-        </div>
+<div id="tab-allocate" class="tab-panel d-none" style="height:calc(100vh - 96px);overflow:hidden">
+  <div class="d-flex h-100">
+    <!-- Sidebar: Danh sách NV -->
+    <div id="alloc-sidebar" class="border-end bg-white d-flex flex-column" style="width:280px;min-width:220px;max-width:320px">
+      <!-- Sidebar header -->
+      <div class="px-3 py-2 border-bottom bg-warning bg-opacity-10">
+        <div class="fw-bold text-warning-emphasis mb-1"><i class="bi bi-people-fill me-1"></i>Nhân viên</div>
+        <select class="form-select form-select-sm" id="alloc-pb-filter">
+          <option value="">-- Tất cả đội --</option>
+        </select>
+      </div>
+      <!-- NV list -->
+      <div id="alloc-emp-list" class="overflow-auto flex-grow-1 py-1">
+        <div class="text-center text-muted py-4 small">Đang tải...</div>
       </div>
     </div>
-    <!-- Content -->
-    <div class="col-12">
-      <div id="alloc-loading" class="text-center py-5 d-none">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="text-muted mt-2">Đang tải...</p>
+
+    <!-- Main content -->
+    <div class="flex-grow-1 d-flex flex-column overflow-hidden">
+      <!-- Toolbar -->
+      <div class="px-3 py-2 border-bottom bg-light d-flex align-items-center gap-2 flex-wrap">
+        <div id="alloc-emp-info" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>Chọn nhân viên bên trái</div>
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <label class="form-label small text-muted mb-0">Ngày nhận:</label>
+          <input type="date" class="form-control form-control-sm" id="alloc-date" style="width:145px" />
+          <button class="btn btn-success btn-sm" id="alloc-bulk-btn" disabled>
+            <i class="bi bi-check2-all me-1"></i>Cấp phát đã chọn (<span id="alloc-selected-count">0</span>)
+          </button>
+        </div>
       </div>
-      <div id="alloc-empty" class="text-center py-5 d-none">
-        <i class="bi bi-check2-circle fs-1 text-success"></i>
-        <p class="text-muted mt-2">Không có vật tư nào cần cấp phát</p>
-      </div>
-      <div class="table-responsive d-none" id="alloc-table-wrap">
-        <table class="table table-hover table-sm align-middle mb-0">
-          <thead class="table-light sticky-top">
-            <tr>
-              <th style="width:36px">
-                <input type="checkbox" class="form-check-input" id="alloc-check-all" title="Chọn tất cả" />
-              </th>
-              <th>Mã CT</th>
-              <th>Vật tư</th>
-              <th class="text-center">ĐVT</th>
-              <th class="text-center">ĐMTG</th>
-              <th>Ngày cấp phát</th>
-              <th class="text-end">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody id="alloc-tbody"></tbody>
-        </table>
+      <!-- Table area -->
+      <div class="flex-grow-1 overflow-auto position-relative">
+        <div id="alloc-loading" class="text-center py-5 d-none">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="text-muted mt-2">Đang tải...</p>
+        </div>
+        <div id="alloc-empty" class="text-center py-5 d-none">
+          <i class="bi bi-check2-circle fs-1 text-success"></i>
+          <p class="text-muted mt-2">Không có vật tư nào cần cấp phát</p>
+        </div>
+        <div class="table-responsive d-none" id="alloc-table-wrap">
+          <table class="table table-hover table-sm align-middle mb-0">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width:36px">
+                  <input type="checkbox" class="form-check-input" id="alloc-check-all" title="Chọn tất cả" />
+                </th>
+                <th>Mã CT</th>
+                <th>Vật tư</th>
+                <th class="text-center">ĐVT</th>
+                <th class="text-center">ĐMTG</th>
+                <th class="text-end">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="alloc-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

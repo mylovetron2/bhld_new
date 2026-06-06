@@ -1806,14 +1806,13 @@ function clGoPage(p) {
 let allocInitialized = false;
 let allocItems = []; // [{mact, mavt, tenvt, dvt, dmtg}]
 let allocSelectedKeys = new Set();
+let allocCurrentManv = null;
 
 async function initAllocateTab() {
   if (!allocInitialized) {
     allocInitialized = true;
     document.getElementById('alloc-date').value = today();
-    await populateAllocEmpSelect();
-    document.getElementById('alloc-pb-filter').addEventListener('change', filterAllocEmpByPb);
-    document.getElementById('alloc-load-btn').addEventListener('click', loadAllocateList);
+    document.getElementById('alloc-pb-filter').addEventListener('change', renderAllocEmpList);
     document.getElementById('alloc-bulk-btn').addEventListener('click', doAllocateBulk);
     document.getElementById('alloc-check-all').addEventListener('change', e => {
       document.querySelectorAll('.alloc-row-check').forEach(cb => {
@@ -1822,42 +1821,76 @@ async function initAllocateTab() {
       });
       updateAllocBulkBtn();
     });
-  } else {
-    // Re-sync NV list if employees updated
-    await populateAllocEmpSelect();
   }
+  await loadAllocSidebar();
 }
 
-async function populateAllocEmpSelect() {
+async function loadAllocSidebar() {
   if (!State.employees || !State.employees.length) {
     const res = await API.getEmployees();
     if (res.success) State.employees = res.data;
   }
   // Populate PB filter
   const pbSel = document.getElementById('alloc-pb-filter');
-  const pbs = [...new Set((State.employees || []).map(e => e.mapb).filter(Boolean))].sort();
   const curPb = pbSel.value;
-  pbSel.innerHTML = '<option value="">-- Tất cả phòng ban --</option>';
+  const pbs = [...new Set((State.employees || []).map(e => e.mapb).filter(Boolean))].sort();
+  pbSel.innerHTML = '<option value="">-- Tất cả đội --</option>';
   pbs.forEach(pb => pbSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(pb)}">${escHtml(pb)}</option>`));
   pbSel.value = curPb;
-  filterAllocEmpByPb();
+  renderAllocEmpList();
 }
 
-function filterAllocEmpByPb() {
+function renderAllocEmpList() {
   const pb = document.getElementById('alloc-pb-filter').value;
-  const empSel = document.getElementById('alloc-emp-select');
-  const cur = empSel.value;
-  empSel.innerHTML = '<option value="">-- Chọn nhân viên --</option>';
-  (State.employees || []).filter(e => !pb || e.mapb === pb).forEach(emp => {
-    empSel.insertAdjacentHTML('beforeend',
-      `<option value="${escHtml(emp.manv)}">${escHtml(emp.manv)} – ${escHtml(emp.tennhanvien)}</option>`);
+  const filtered = (State.employees || []).filter(e => e.tennhanvien && (!pb || e.mapb === pb));
+
+  // Group by phong ban
+  const groups = {};
+  filtered.forEach(emp => {
+    const dept = emp.mapb || 'Chưa phân loại';
+    if (!groups[dept]) groups[dept] = [];
+    groups[dept].push(emp);
   });
-  if (cur) empSel.value = cur;
+
+  const container = document.getElementById('alloc-emp-list');
+  if (!filtered.length) {
+    container.innerHTML = '<div class="text-center text-muted py-4 small">Không có nhân viên</div>';
+    return;
+  }
+
+  container.innerHTML = Object.entries(groups).map(([dept, emps]) => `
+    <div class="alloc-dept-group">
+      <div class="px-3 py-1 small fw-semibold text-muted bg-light border-bottom sticky-top" style="font-size:11px;letter-spacing:.5px">
+        <i class="bi bi-building me-1"></i>${escHtml(dept)} (${emps.length})
+      </div>
+      ${emps.map(emp => `
+        <div class="alloc-emp-item px-3 py-2 border-bottom cursor-pointer d-flex align-items-center gap-2 ${emp.manv === allocCurrentManv ? 'bg-success bg-opacity-10 border-start border-success border-3' : ''}"
+          onclick="selectAllocEmp('${escHtml(emp.manv)}', '${escHtml(emp.tennhanvien)}', this)">
+          <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0" style="width:32px;height:32px">
+            <i class="bi bi-person text-primary" style="font-size:14px"></i>
+          </div>
+          <div class="overflow-hidden">
+            <div class="fw-medium text-truncate small">${escHtml(emp.tennhanvien)}</div>
+            <div class="text-muted" style="font-size:11px">${escHtml(emp.manv)}</div>
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
 }
 
-async function loadAllocateList() {
-  const manv = document.getElementById('alloc-emp-select').value;
-  if (!manv) { showToast('Vui lòng chọn nhân viên', 'warning'); return; }
+async function selectAllocEmp(manv, tennhanvien, el) {
+  allocCurrentManv = manv;
+  // Highlight selected
+  document.querySelectorAll('.alloc-emp-item').forEach(e => {
+    e.classList.remove('bg-success', 'bg-opacity-10', 'border-start', 'border-success', 'border-3');
+  });
+  el.classList.add('bg-success', 'bg-opacity-10', 'border-start', 'border-success', 'border-3');
+  // Show name in toolbar
+  document.getElementById('alloc-emp-info').innerHTML =
+    `<i class="bi bi-person-fill text-primary me-1"></i><strong>${escHtml(tennhanvien)}</strong> <span class="text-muted small">(${escHtml(manv)})</span>`;
+  await loadAllocateList(manv);
+}
+
+async function loadAllocateList(manv) {
   setLoading('alloc-loading', true);
   document.getElementById('alloc-table-wrap').classList.add('d-none');
   document.getElementById('alloc-empty').classList.add('d-none');
@@ -1896,7 +1929,6 @@ async function loadAllocateList() {
 }
 
 function renderAllocateList() {
-  const commonDate = document.getElementById('alloc-date').value || today();
   document.getElementById('alloc-tbody').innerHTML = allocItems.map((item, idx) => {
     const key = `${item.mact}-${item.mavt}`;
     return `<tr>
@@ -1905,7 +1937,6 @@ function renderAllocateList() {
       <td><span class="fw-medium">${escHtml(item.tenvt || 'Mã: ' + item.mavt)}</span></td>
       <td class="text-center text-muted small">${escHtml(item.dvt || '—')}</td>
       <td class="text-center">${item.dmtg} tháng</td>
-      <td><input type="date" class="form-control form-control-sm" id="alloc-row-date-${idx}" value="${commonDate}" style="min-width:140px" /></td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-success" onclick="doAllocateSingle(${idx}, this)">
           <i class="bi bi-box-arrow-in-down me-1"></i>Cấp phát
@@ -1928,7 +1959,7 @@ function updateAllocBulkBtn() {
 
 async function doAllocateSingle(idx, btn) {
   const item = allocItems[idx];
-  const ngnhan = document.getElementById(`alloc-row-date-${idx}`)?.value || today();
+  const ngnhan = document.getElementById('alloc-date').value || today();
   const origHtml = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
@@ -1963,15 +1994,12 @@ async function doAllocateBulk() {
   const origHtml = bulkBtn.innerHTML;
   bulkBtn.disabled = true;
   bulkBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
+  const ngnhan = document.getElementById('alloc-date').value || today();
   const tasks = allocItems
     .map((item, idx) => ({ item, idx, key: `${item.mact}-${item.mavt}` }))
     .filter(t => allocSelectedKeys.has(t.key));
   const results = await Promise.allSettled(
-    tasks.map(t => {
-      const rowDate = document.getElementById(`alloc-row-date-${t.idx}`)?.value ||
-        document.getElementById('alloc-date').value || today();
-      return API.allocate(t.item.mact, t.item.mavt, rowDate);
-    })
+    tasks.map(t => API.allocate(t.item.mact, t.item.mavt, ngnhan))
   );
   let success = 0, failed = 0;
   const doneKeys = new Set();
