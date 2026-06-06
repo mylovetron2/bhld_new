@@ -95,27 +95,28 @@ try {
         }
     }
     elseif ($method === 'PUT') {
-        // Update employee name
         $input = json_decode(file_get_contents('php://input'), true);
         
-        if (!isset($input['manv']) || !isset($input['tennhanvien'])) {
-            sendError('Thiếu thông tin manv hoặc tennhanvien', 400);
+        if (!isset($input['manv'])) {
+            sendError('Thiếu manv', 400);
         }
         
         $manv = mysqli_real_escape_string($conn, $input['manv']);
-        $tennhanvien = mysqli_real_escape_string($conn, $input['tennhanvien']);
+        $sets = [];
+        if (isset($input['tennhanvien'])) $sets[] = "tennhanvien = '" . mysqli_real_escape_string($conn, $input['tennhanvien']) . "'";
+        if (isset($input['mapb']))        $sets[] = "mapb = '"        . mysqli_real_escape_string($conn, $input['mapb'])        . "'";
+        if (array_key_exists('dinhmuc', $input)) {
+            $dm = $input['dinhmuc'] !== '' && $input['dinhmuc'] !== null
+                ? "'" . mysqli_real_escape_string($conn, $input['dinhmuc']) . "'"
+                : 'NULL';
+            $sets[] = "dinhmuc = $dm";
+        }
+        if (empty($sets)) sendError('Không có trường nào để cập nhật', 400);
         
-        $sql = "UPDATE bhld_nhanvien 
-                SET tennhanvien = '$tennhanvien' 
-                WHERE manv = '$manv'";
+        $sql = "UPDATE bhld_nhanvien SET " . implode(', ', $sets) . " WHERE manv = '$manv'";
         
         if (mysqli_query($conn, $sql)) {
-            if (mysqli_affected_rows($conn) > 0) {
-                sendSuccess(['manv' => $manv, 'tennhanvien' => $tennhanvien], 
-                           'Cập nhật tên nhân viên thành công');
-            } else {
-                sendError('Không tìm thấy nhân viên hoặc tên không thay đổi', 404);
-            }
+            sendSuccess(['manv' => $manv], 'Cập nhật nhân viên thành công');
         } else {
             sendError('Lỗi cập nhật: ' . mysqli_error($conn), 500);
         }

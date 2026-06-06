@@ -48,6 +48,11 @@ async function apiFetch(endpoint, options = {}) {
 }
 
 const API = {
+  // ===== ĐỊNH MỨC =====
+  getDinhMuc() {
+    return apiFetch('/dinhmuc.php');
+  },
+
   // ===== NHÂN VIÊN =====
   getEmployees(search) {
     const params = search ? `?search=${encodeURIComponent(search)}` : '';
@@ -63,6 +68,12 @@ const API = {
     return apiFetch('/employees.php', {
       method: 'PUT',
       body: JSON.stringify({ manv, tennhanvien }),
+    });
+  },
+  updateEmployee(payload) {
+    return apiFetch('/employees.php', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
     });
   },
 

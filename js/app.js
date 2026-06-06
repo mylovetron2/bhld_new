@@ -17,6 +17,7 @@ const State = {
   currentBulkAllocateItems: [],
   lastReportData: null,
   lastReportMonthStr: null,
+  dinhMucData: [], // cache danh sách định mức + chitiet
 };
 
 // ===== UTILS =====
@@ -740,6 +741,12 @@ document.getElementById('cdm-add-btn').addEventListener('click', () => {
 // ====================================================================
 let empInitialized = false;
 let empAllList = [];
+let empRenderedList = []; // list đang render (để tra theo index)
+
+function openEmpModalByIdx(idx) {
+  const emp = empRenderedList[idx];
+  if (emp) openEmpModal(emp);
+}
 
 async function initEmployeesTab() {
   if (!empInitialized) {
@@ -752,6 +759,14 @@ async function initEmployeesTab() {
     document.getElementById('emp-reload-btn').addEventListener('click', () => loadEmployees());
     document.getElementById('emp-add-btn').addEventListener('click', () => openEmpModal(null));
     document.getElementById('emp-save-btn').addEventListener('click', saveEmployee);
+    // Restore các field bị ẩn khi modal đóng
+    document.getElementById('empModal').addEventListener('hidden.bs.modal', () => {
+      ['emp-manv-input','emp-ten-input','emp-mapb-input'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.closest('.col-md-6').classList.remove('d-none'); el.disabled = false; }
+      });
+      document.getElementById('emp-first-ct-section').classList.remove('d-none');
+    });
   }
   loadEmployees();
 }
@@ -785,6 +800,14 @@ async function loadEmployees(search) {
           sel.insertAdjacentHTML('beforeend',
             `<option value="${escHtml(e.mapb)}">${escHtml(e.mapb)} - ${escHtml(e.tenphongban||e.mapb)}</option>`);
         });
+        // Populate modal phòng ban select
+        const modalPbSel = document.getElementById('emp-mapb-input');
+        if (modalPbSel && modalPbSel.tagName === 'SELECT' && modalPbSel.options.length <= 1) {
+          pbs.forEach(e => {
+            modalPbSel.insertAdjacentHTML('beforeend',
+              `<option value="${escHtml(e.mapb)}">${escHtml(e.mapb)} - ${escHtml(e.tenphongban||e.mapb)}</option>`);
+          });
+        }
       }
       renderEmployeeTable(res.data);
     }
@@ -798,10 +821,13 @@ async function loadEmployees(search) {
 function renderEmployeeTable(list) {
   const tbody = document.getElementById('emp-tbody');
   list = list.filter(emp => emp.tennhanvien && emp.tennhanvien.trim() !== '');
+  empRenderedList = list;
   document.getElementById('emp-empty').classList.toggle('d-none', list.length > 0);
   if (list.length === 0) { tbody.innerHTML = ''; return; }
-  tbody.innerHTML = list.map(emp => `
-    <tr>
+  tbody.innerHTML = list.map((emp, idx) => {
+    const key = `emp-row-${idx}`;
+    return `
+    <tr data-emp-idx="${idx}">
       <td><span class="badge bg-primary bg-opacity-10 text-primary fw-semibold">${escHtml(emp.manv)}</span></td>
       <td>${escHtml(emp.tennhanvien)}</td>
       <td>${escHtml(emp.mapb)}</td>
@@ -811,11 +837,15 @@ function renderEmployeeTable(list) {
         <button class="btn btn-sm btn-outline-info me-1" onclick="openEmpHistory('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')">
           <i class="bi bi-clock-history"></i> Lịch sử
         </button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="openEmpEditName('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')">
-          <i class="bi bi-pencil"></i> Đổi tên
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEmpModalByIdx(${idx})">
+          <i class="bi bi-pencil"></i> Sửa
+        </button>
+        <button class="btn btn-sm btn-outline-success" onclick="openFirstAllocateModal('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}','${escHtml(emp.mapb)}','${escHtml(emp.dinhmuc||'')}')">
+          <i class="bi bi-box-arrow-in-down"></i> Cấp lần đầu
         </button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function openEmpModal(emp) {
@@ -824,8 +854,132 @@ function openEmpModal(emp) {
   document.getElementById('emp-manv-input').value = emp?.manv || '';
   document.getElementById('emp-manv-input').disabled = !!emp;
   document.getElementById('emp-ten-input').value = emp?.tennhanvien || '';
-  document.getElementById('emp-mapb-input').value = emp?.mapb || '';
-  document.getElementById('emp-dinhmuc-input').value = emp?.dinhmuc || '';
+
+  const modalPbSel = document.getElementById('emp-mapb-input');
+  const dmSel = document.getElementById('emp-dinhmuc-input');
+  const setValues = () => {
+    modalPbSel.value = emp?.mapb || '';
+    dmSel.value = emp?.dinhmuc || '';
+  };
+
+  const loadPb = modalPbSel.options.length <= 1
+    ? API.getEmployees('').then(res => {
+        if (res.success && res.data) {
+          const pbs = [...new Map(res.data.filter(e => e.mapb).map(e => [e.mapb, e])).values()]
+            .sort((a, b) => (a.mapb||'').localeCompare(b.mapb||''));
+          pbs.forEach(e => {
+            modalPbSel.insertAdjacentHTML('beforeend',
+              `<option value="${escHtml(e.mapb)}">${escHtml(e.mapb)} - ${escHtml(e.tenphongban||e.mapb)}</option>`);
+          });
+          const filterSel = document.getElementById('emp-pb-filter');
+          if (filterSel && filterSel.options.length <= 1) {
+            pbs.forEach(e => filterSel.insertAdjacentHTML('beforeend',
+              `<option value="${escHtml(e.mapb)}">${escHtml(e.mapb)} - ${escHtml(e.tenphongban||e.mapb)}</option>`));
+          }
+        }
+      }).catch(() => {})
+    : Promise.resolve();
+
+  const loadDm = dmSel.options.length <= 1
+    ? API.getDinhMuc().then(res => {
+        if (res.success && res.data) {
+          State.dinhMucData = res.data;
+          res.data.forEach(d => {
+            const label = d.mota ? `${escHtml(d.madm)} - ${escHtml(d.mota)}` : escHtml(d.madm);
+            dmSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(d.madm)}">${label}</option>`);
+          });
+        }
+      }).catch(() => {})
+    : Promise.resolve();
+
+  Promise.all([loadPb, loadDm]).then(() => {
+    setValues();
+    document.getElementById('emp-first-ct-date').value = today();
+    if (!emp) {
+      // Thêm mới: auto check cấp phát lần đầu, hiện ngày
+      document.getElementById('emp-create-ct-check').checked = true;
+      document.getElementById('emp-first-ct-date-row').classList.remove('d-none');
+      document.getElementById('emp-first-ct-section').classList.remove('d-none');
+    } else {
+      // Sửa: ẩn section cấp phát lần đầu
+      document.getElementById('emp-create-ct-check').checked = false;
+      document.getElementById('emp-first-ct-date-row').classList.add('d-none');
+      document.getElementById('emp-first-ct-section').classList.add('d-none');
+    }
+    // Preview vật tư nếu đã có định mức
+    if (document.getElementById('emp-dinhmuc-input').value) {
+      onDinhMucChange(document.getElementById('emp-dinhmuc-input').value);
+    } else {
+      document.getElementById('emp-dm-preview').classList.add('d-none');
+    }
+  });
+  getModal('empModal').show();
+}
+
+function onDinhMucChange(madm) {
+  const preview = document.getElementById('emp-dm-preview');
+  const tbody = document.getElementById('emp-dm-preview-tbody');
+  if (!madm) { preview.classList.add('d-none'); return; }
+
+  const dm = State.dinhMucData.find(d => d.madm === madm);
+  if (!dm || !dm.chitiet || dm.chitiet.length === 0) { preview.classList.add('d-none'); return; }
+
+  tbody.innerHTML = dm.chitiet.map(r => `
+    <tr>
+      <td>${escHtml(r.tenvt || 'Mã: ' + r.mavt)}</td>
+      <td class="text-center" style="width:80px">
+        <input type="number" min="0" max="99" value="${r.soluong || 1}"
+          class="form-control form-control-sm text-center p-0"
+          data-mavt="${r.mavt}" data-dmtg="${r.dmtg}" />
+      </td>
+      <td class="text-center">${escHtml(r.dvt || '')}</td>
+      <td class="text-center">${r.dmtg} tháng</td>
+    </tr>`).join('');
+  preview.classList.remove('d-none');
+}
+
+function toggleFirstCtDate(checked) {
+  document.getElementById('emp-first-ct-date-row').classList.toggle('d-none', !checked);
+}
+
+function openFirstAllocateModal(manv, tennhanvien, mapb, dinhmuc) {
+  // Mở modal ở chế độ "cấp lần đầu" cho NV đã có
+  const emp = { manv, tennhanvien, mapb, dinhmuc, isFirstAllocate: true };
+  State.currentEmpEdit = emp;
+
+  document.getElementById('empModalTitle').textContent = `Cấp phát lần đầu: ${tennhanvien} (${manv})`;
+  document.getElementById('emp-manv-input').value = manv;
+  document.getElementById('emp-manv-input').disabled = true;
+  document.getElementById('emp-ten-input').value = tennhanvien;
+  // Ẩn các row không cần thiết
+  document.getElementById('emp-manv-input').closest('.col-md-6').classList.add('d-none');
+  document.getElementById('emp-ten-input').closest('.col-md-6').classList.add('d-none');
+  document.getElementById('emp-mapb-input').closest('.col-md-6').classList.add('d-none');
+
+  const dmSel = document.getElementById('emp-dinhmuc-input');
+  const doOpen = () => {
+    dmSel.value = dinhmuc || '';
+    document.getElementById('emp-first-ct-date').value = today();
+    document.getElementById('emp-create-ct-check').checked = true;
+    document.getElementById('emp-first-ct-date-row').classList.remove('d-none');
+    document.getElementById('emp-dm-preview').classList.remove('d-none');
+    if (dinhmuc) onDinhMucChange(dinhmuc);
+  };
+
+  if (dmSel.options.length <= 1) {
+    API.getDinhMuc().then(res => {
+      if (res.success && res.data) {
+        State.dinhMucData = res.data;
+        res.data.forEach(d => {
+          const label = d.mota ? `${escHtml(d.madm)} - ${escHtml(d.mota)}` : escHtml(d.madm);
+          dmSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(d.madm)}">${label}</option>`);
+        });
+      }
+      doOpen();
+    }).catch(() => doOpen());
+  } else {
+    doOpen();
+  }
   getModal('empModal').show();
 }
 
@@ -868,6 +1022,47 @@ async function saveEmployee() {
     return;
   }
 
+  // Chế độ "Cấp lần đầu" cho NV đã tồn tại
+  if (emp?.isFirstAllocate) {
+    const dinhmuc = document.getElementById('emp-dinhmuc-input').value.trim();
+    const ngct = document.getElementById('emp-first-ct-date').value || today();
+    if (!dinhmuc) { showToast('Vui lòng chọn định mức', 'warning'); return; }
+    btn.disabled = true;
+    try {
+      const manvFmt = /^\d{4}$/.test(emp.manv) ? '0' + emp.manv : emp.manv;
+      const ym = ngct.substring(0, 7);
+      const mact = `${ym}-${emp.mapb}-${manvFmt}`;
+      const ctRes = await API.createCertificate({ mact, manv: emp.manv, ngct, mapb: emp.mapb, madm: dinhmuc });
+      if (ctRes.success) {
+        const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
+        const slMap = {};
+        slInputs.forEach(inp => { slMap[inp.dataset.mavt] = { sl: parseInt(inp.value)||0, dmtg: parseInt(inp.dataset.dmtg)||0 }; });
+
+        const dm = State.dinhMucData.find(d => d.madm === dinhmuc);
+        if (dm?.chitiet?.length) {
+          for (const r of dm.chitiet) {
+            const override = slMap[r.mavt];
+            const qty = override ? override.sl : (r.soluong || 1);
+            if (qty <= 0) continue;
+            await API.createCertificateDetail({
+              mact, mavt: r.mavt, sl: 0, dmtg: r.dmtg,
+              ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
+            });
+          }
+        }
+        showToast(`Đã tạo CT ${mact} với ${dm?.chitiet?.length || 0} vật tư`, 'success');
+        getModal('empModal').hide();
+      } else {
+        showToast('Tạo CT thất bại: ' + (ctRes.message || ''), 'danger');
+      }
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'danger');
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+
   const manv = document.getElementById('emp-manv-input').value.trim();
   const tennhanvien = document.getElementById('emp-ten-input').value.trim();
   const mapb = document.getElementById('emp-mapb-input').value.trim();
@@ -880,10 +1075,47 @@ async function saveEmployee() {
 
   btn.disabled = true;
   try {
-    const payload = { manv, tennhanvien, mapb, ...(dinhmuc ? { dinhmuc } : {}) };
-    const res = await API.addEmployee(payload);
+    const payload = { manv, tennhanvien, mapb, dinhmuc: dinhmuc || '' };
+    const isEdit = !!emp; // emp đã có = đang sửa
+    const res = isEdit ? await API.updateEmployee(payload) : await API.addEmployee(payload);
     if (res.success) {
-      showToast('Thêm nhân viên thành công!', 'success');
+      // Tạo CT lần đầu nếu checkbox được chọn (chỉ khi thêm mới)
+      const createCt = !isEdit && document.getElementById('emp-create-ct-check')?.checked;
+      if (createCt && dinhmuc) {
+        const ngct = document.getElementById('emp-first-ct-date').value || today();
+        const ym = ngct.substring(0, 7); // YYYY-MM
+        const manvFmt = /^\d{4}$/.test(manv) ? '0' + manv : manv;
+        const mact = `${ym}-${mapb}-${manvFmt}`;
+        try {
+          const ctRes = await API.createCertificate({ mact, manv, ngct, mapb, madm: dinhmuc });
+          if (ctRes.success) {
+            // Đọc SL từ các input trong preview table
+            const slInputs = document.querySelectorAll('#emp-dm-preview-tbody input[data-mavt]');
+            const slMap = {};
+            slInputs.forEach(inp => { slMap[inp.dataset.mavt] = { sl: parseInt(inp.value)||0, dmtg: parseInt(inp.dataset.dmtg)||0 }; });
+
+            const dm = State.dinhMucData.find(d => d.madm === dinhmuc);
+            if (dm?.chitiet?.length) {
+              for (const r of dm.chitiet) {
+                const override = slMap[r.mavt];
+                const qty = override ? override.sl : (r.soluong || 1);
+                if (qty <= 0) continue; // bỏ qua vật tư SL=0
+                await API.createCertificateDetail({
+                  mact, mavt: r.mavt, sl: 0, dmtg: r.dmtg,
+                  ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
+                });
+              }
+            }
+            showToast(`Đã tạo CT ${mact} với ${dm?.chitiet?.length || 0} vật tư`, 'success');
+          } else {
+            showToast('Lưu NV OK nhưng tạo CT thất bại: ' + (ctRes.message || ''), 'warning');
+          }
+        } catch (ctErr) {
+          showToast('Lưu NV OK nhưng lỗi tạo CT: ' + ctErr.message, 'warning');
+        }
+      } else {
+        showToast('Thêm nhân viên thành công!', 'success');
+      }
       getModal('empModal').hide();
       loadEmployees();
       loadEmployeesForSelect();
