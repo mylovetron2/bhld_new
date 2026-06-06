@@ -1046,11 +1046,13 @@ async function saveEmployee() {
             const qty = override ? override.sl : 1;
             if (qty <= 0) continue;
             const dmtg = parseInt(r.dmtg) || 0;
-            const ngnhantt = dmtg > 0 ? (() => { const d = new Date(ngct); d.setMonth(d.getMonth() + dmtg); return d.toISOString().split('T')[0]; })() : ngct;
+            // Bước 1: tạo dòng vật tư sl=0
             await API.createCertificateDetail({
-              mact, mavt: r.mavt, sl: 1, dmtg,
-              ngnhan: ngct, ngnhantt
+              mact, mavt: r.mavt, sl: 0, dmtg,
+              ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
             });
+            // Bước 2: cấp phát → tự động tạo CT kỳ tiếp theo
+            await API.allocate(mact, r.mavt, ngct);
             count++;
           }
         }
@@ -1105,11 +1107,13 @@ async function saveEmployee() {
                 const qty = override ? override.sl : 1;
                 if (qty <= 0) continue;
                 const dmtg = parseInt(r.dmtg) || 0;
-                const ngnhantt = dmtg > 0 ? (() => { const d = new Date(ngct); d.setMonth(d.getMonth() + dmtg); return d.toISOString().split('T')[0]; })() : ngct;
+                // Bước 1: tạo dòng vật tư sl=0
                 await API.createCertificateDetail({
-                  mact, mavt: r.mavt, sl: 1, dmtg,
-                  ngnhan: ngct, ngnhantt
+                  mact, mavt: r.mavt, sl: 0, dmtg,
+                  ngnhan: '1911-11-11', ngnhantt: '1911-11-11'
                 });
+                // Bước 2: cấp phát → tự động tạo CT kỳ tiếp theo
+                await API.allocate(mact, r.mavt, ngct);
                 count++;
               }
             }
