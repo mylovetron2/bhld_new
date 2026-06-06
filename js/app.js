@@ -266,8 +266,8 @@ function renderCertDetails(mact, details) {
     } else {
       const due = new Date(d.ngnhan);
       due.setMonth(due.getMonth() + parseInt(d.dmtg || 0));
-      if (d.ngnhan && !isNaN(due) && now > due) statusBadge = '<span class="badge bg-danger">Quá hạn</span>';
-      else statusBadge = '<span class="badge bg-success">Đang dùng</span>';
+      if (d.ngnhan && !isNaN(due) && now > due) statusBadge = '<span class="badge bg-success">Đã nhận</span>';
+      else statusBadge = '<span class="badge bg-success">Đã nhận</span>';
     }
 
     let actionBtn = '';
@@ -627,8 +627,8 @@ function renderCdmTable(mact, details) {
     } else {
       const due = new Date(d.ngnhan);
       due.setMonth(due.getMonth() + parseInt(d.dmtg || 0));
-      if (d.ngnhan && !isNaN(due) && now > due) status = '<span class="badge bg-danger">Quá hạn</span>';
-      else status = '<span class="badge bg-success">Đang dùng</span>';
+      if (d.ngnhan && !isNaN(due) && now > due) status = '<span class="badge bg-success">Đã nhận</span>';
+      else status = '<span class="badge bg-success">Đã nhận</span>';
     }
     return `<tr>
       <td>${escHtml(d.tenvt || 'Mã: ' + d.mavt)}</td>
@@ -1137,8 +1137,8 @@ async function openEmpHistory(manv, tennhanvien) {
         } else {
           const due = new Date(h.ngnhan);
           due.setMonth(due.getMonth() + parseInt(h.dmtg || 0));
-          if (h.ngnhan && !isNaN(due) && now > due) { status = 'Quá hạn'; statusClass = 'bg-danger'; }
-          else { status = 'Đang dùng'; statusClass = 'bg-success'; }
+          if (h.ngnhan && !isNaN(due) && now > due) { status = 'Đã nhận'; statusClass = 'bg-success'; }
+          else { status = 'Đã nhận'; statusClass = 'bg-success'; }
         }
         return `<tr>
           <td>${escHtml(h.mact)}</td>
@@ -1203,7 +1203,7 @@ async function updateHistorySl(input) {
         if (sl === 0) {
           badge.className = 'badge bg-secondary'; badge.textContent = 'Chưa cấp';
         } else {
-          badge.className = 'badge bg-success'; badge.textContent = 'Đang dùng';
+          badge.className = 'badge bg-success'; badge.textContent = 'Đã nhận';
         }
       }
       showToast('Đã cập nhật SL', 'success');
