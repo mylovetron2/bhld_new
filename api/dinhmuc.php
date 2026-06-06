@@ -15,7 +15,7 @@ try {
 
         // Lấy chi tiết định mức JOIN vật tư
         $result2 = mysqli_query($conn,
-            "SELECT ct.madm, ct.mavt, ct.soluong, ct.dmtg,
+            "SELECT ct.madm, ct.mavt, ct.dmuc as dmtg,
                     IFNULL(vt.tenvt, '') as tenvt,
                     IFNULL(vt.dvt, '') as dvt
              FROM bhld_ctdmuc ct

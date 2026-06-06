@@ -928,7 +928,7 @@ function onDinhMucChange(madm) {
     <tr>
       <td>${escHtml(r.tenvt || 'Mã: ' + r.mavt)}</td>
       <td class="text-center" style="width:80px">
-        <input type="number" min="0" max="99" value="${r.soluong || 1}"
+        <input type="number" min="0" max="99" value="1"
           class="form-control form-control-sm text-center p-0"
           data-mavt="${r.mavt}" data-dmtg="${r.dmtg}" />
       </td>
