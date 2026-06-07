@@ -1222,19 +1222,47 @@ async function updateHistorySl(input) {
 // TAB 4: BÁO CÁO
 // ====================================================================
 let rptInitialized = false;
+let rptSelectedDate = new Date(); // current month
+
+function rptMonthStr() {
+  return String(rptSelectedDate.getMonth() + 1).padStart(2, '0') + '/' + rptSelectedDate.getFullYear();
+}
+
+function rptUpdateLabel() {
+  const mm = String(rptSelectedDate.getMonth() + 1).padStart(2, '0');
+  const yyyy = rptSelectedDate.getFullYear();
+  document.getElementById('rpt-month-label').textContent = `${mm}/${yyyy}`;
+  // Keep hidden inputs in sync for compat (printMonthlySummary etc.)
+  document.getElementById('rpt-month').value = mm;
+  document.getElementById('rpt-year').value = yyyy;
+}
 
 function initReportsTab() {
   if (!rptInitialized) {
     rptInitialized = true;
-    // Populate year select
-    const now = new Date();
-    const yearSel = document.getElementById('rpt-year');
-    for (let y = now.getFullYear(); y >= 2020; y--) {
-      yearSel.insertAdjacentHTML('beforeend', `<option value="${y}" ${y === now.getFullYear() ? 'selected' : ''}>${y}</option>`);
-    }
-    // Set current month
-    document.getElementById('rpt-month').value = String(now.getMonth() + 1).padStart(2, '0');
+    rptSelectedDate = new Date();
+    rptUpdateLabel();
 
+    document.getElementById('rpt-prev-btn').addEventListener('click', () => {
+      rptSelectedDate.setMonth(rptSelectedDate.getMonth() - 1);
+      rptUpdateLabel();
+      loadMonthlyReport();
+    });
+    document.getElementById('rpt-next-btn').addEventListener('click', () => {
+      rptSelectedDate.setMonth(rptSelectedDate.getMonth() + 1);
+      rptUpdateLabel();
+      loadMonthlyReport();
+    });
+    document.getElementById('rpt-month-display').addEventListener('click', async () => {
+      // Simple prompt-based month picker fallback
+      const input = prompt('Nhập tháng/năm (MM/YYYY):', rptMonthStr());
+      if (!input) return;
+      const m = input.match(/^(\d{1,2})[\/\-](\d{4})$/);
+      if (!m) { showToast('Định dạng không hợp lệ. Nhập dạng MM/YYYY', 'warning'); return; }
+      rptSelectedDate = new Date(parseInt(m[2]), parseInt(m[1]) - 1, 1);
+      rptUpdateLabel();
+      loadMonthlyReport();
+    });
     document.getElementById('rpt-load-btn').addEventListener('click', loadMonthlyReport);
     document.getElementById('rpt-print-btn').addEventListener('click', () => window.print());
     document.getElementById('rpt-print-total-btn').addEventListener('click', printMonthlySummary);
@@ -1244,12 +1272,10 @@ function initReportsTab() {
 }
 
 async function loadMonthlyReport() {
-  const month = document.getElementById('rpt-month').value;
-  const year = document.getElementById('rpt-year').value;
-  const monthStr = `${month}/${year}`;
-
+  const monthStr = rptMonthStr();
   setLoading('rpt-loading', true);
   document.getElementById('rpt-content').innerHTML = '';
+  document.getElementById('rpt-stats-bar').classList.add('d-none');
 
   try {
     const res = await API.getMonthlyReport(monthStr);
@@ -1272,98 +1298,100 @@ async function loadMonthlyReport() {
 
 function renderMonthlyReport(data, monthStr) {
   const container = document.getElementById('rpt-content');
+  const deps = data.departments || [];
 
-  // Summary section
+  // --- Stats bar ---
+  let totalNV = 0, totalVT = 0;
+  deps.forEach(dept => {
+    totalNV += (dept.employees || []).length;
+    (dept.employees || []).forEach(emp => {
+      const eq = emp.equipment || emp.equipmentStatus || {};
+      Object.values(eq).forEach(v => { if ((v.received || 0) > 0) totalVT++; });
+    });
+  });
+  const totalPB = deps.length;
+  // Completion: NV có ít nhất 1 vật tư / tổng NV
+  const nvDone = deps.reduce((s, d) => s + (d.employees||[]).filter(emp => {
+    const eq = emp.equipment || emp.equipmentStatus || {};
+    return Object.values(eq).some(v => (v.received||0) > 0);
+  }).length, 0);
+  const rate = totalNV > 0 ? Math.round(nvDone / totalNV * 100) : 0;
+
+  document.getElementById('rpt-stat-pb').textContent = totalPB;
+  document.getElementById('rpt-stat-nv').textContent = totalNV;
+  document.getElementById('rpt-stat-vt').textContent = totalVT;
+  const rateEl = document.getElementById('rpt-stat-rate');
+  rateEl.textContent = `Tỷ lệ: ${rate}%`;
+  rateEl.className = rate >= 80 ? 'ms-auto fw-semibold text-success' : 'ms-auto fw-semibold text-warning';
+  document.getElementById('rpt-stats-bar').classList.remove('d-none');
+
+  if (!deps.length) {
+    container.innerHTML = '<div class="alert alert-info">Không có dữ liệu phòng ban.</div>';
+    return;
+  }
+
+  // --- Fixed column table per dept ---
+  const deptHtml = deps.map(dept => {
+    const deptName = escHtml(dept.tenphongban || dept.departmentName || dept.mapb || '');
+    const empRows = (dept.employees || []).map((emp, idx) => {
+      const eq = emp.equipment || emp.equipmentStatus || {};
+      const cells = EQUIP_COLS.map(col => {
+        const val = eq[col.key] ? (eq[col.key].received || 0) : 0;
+        if (val <= 0) return '<td class="text-center"></td>';
+        const display = val > 1 ? `<span class="fw-bold text-success">${val}</span>` : '<span class="text-success fw-bold">✓</span>';
+        return `<td class="text-center">${display}</td>`;
+      }).join('');
+      return `<tr>
+        <td class="text-center text-muted small">${idx + 1}</td>
+        <td>${escHtml(emp.tennhanvien || emp.employeeName || emp.manv || '')}</td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    return `<div class="mb-4">
+      <div class="fw-bold text-white py-2 px-3 mb-0" style="background:#1e40af;border-radius:6px 6px 0 0">
+        <i class="bi bi-building me-2"></i>${deptName}
+        <span class="badge bg-white text-primary ms-2">${(dept.employees||[]).length} NV</span>
+      </div>
+      <div class="table-responsive" style="border:1px solid #dee2e6;border-top:none;border-radius:0 0 6px 6px">
+        <table class="table table-sm table-bordered align-middle mb-0" style="min-width:600px">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th class="text-center" style="width:40px">STT</th>
+              <th style="min-width:160px">Họ tên</th>
+              ${EQUIP_COLS.map(c => `<th class="text-center" style="width:64px">${escHtml(c.label)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>${empRows || '<tr><td colspan="9" class="text-center text-muted fst-italic py-3">Không có dữ liệu</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  // --- Summary section ---
   let summaryHtml = '';
   if (data.summary && data.summary.items && data.summary.items.length > 0) {
-    summaryHtml = `
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white fw-semibold">
-          <i class="bi bi-pie-chart me-2"></i>Thống kê vật tư – Tháng ${escHtml(monthStr)}
-        </div>
-        <div class="card-body p-0">
-          <table class="table table-sm align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Vật tư</th>
-                <th class="text-center">ĐVT</th>
-                <th class="text-center">Tổng số lượng</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.summary.items.map(item => `
-                <tr>
-                  <td>${escHtml(item.tenvt || item.mavt)}</td>
-                  <td class="text-center">${escHtml(item.dvt || '')}</td>
-                  <td class="text-center fw-semibold">${item.quantity || item.sl || 0}</td>
-                </tr>`).join('')}
-              <tr class="table-active fw-bold">
-                <td colspan="2">Tổng cộng</td>
-                <td class="text-center">${data.summary.totalQuantity || 0}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>`;
+    const rows = data.summary.items.map(item => `<tr>
+      <td>${escHtml(item.tenvt || item.mavt)}</td>
+      <td class="text-center">${escHtml(item.dvt || '')}</td>
+      <td class="text-center fw-semibold">${item.soluong || item.quantity || 0}</td>
+    </tr>`).join('');
+    summaryHtml = `<div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white fw-semibold py-2">
+        <i class="bi bi-pie-chart me-2"></i>Thống kê tổng hợp – Tháng ${escHtml(monthStr)}
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light"><tr><th>Vật tư</th><th class="text-center">ĐVT</th><th class="text-center">Số lượng</th></tr></thead>
+          <tbody>${rows}
+            <tr class="table-active fw-bold"><td colspan="2">Tổng cộng</td><td class="text-center">${data.summary.totalQuantity || 0}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
   }
 
-  // Departments section
-  let deptsHtml = '';
-  if (data.departments && data.departments.length > 0) {
-    // Collect all equipment names
-    const allEquip = new Set();
-    data.departments.forEach(dept => {
-      dept.employees.forEach(emp => {
-        Object.keys(emp.equipmentStatus || emp.equipment || {}).forEach(k => allEquip.add(k));
-      });
-    });
-    const equipNames = [...allEquip];
-
-    deptsHtml = data.departments.map(dept => {
-      const empRows = (dept.employees || []).map(emp => {
-        const eqStatus = emp.equipmentStatus || emp.equipment || {};
-        const eqCells = equipNames.map(name => {
-          const s = eqStatus[name];
-          if (!s) return '<td class="text-center text-muted">—</td>';
-          const rec = s.received || 0;
-          const req = s.required || 0;
-          const cls = rec >= req ? 'text-success' : rec > 0 ? 'text-warning' : 'text-muted';
-          return `<td class="text-center ${cls}">${rec}${req > 0 ? '/' + req : ''}</td>`;
-        }).join('');
-        return `<tr>
-          <td class="ps-3">${escHtml(emp.employeeCode || emp.manv)}</td>
-          <td>${escHtml(emp.employeeName || emp.tennhanvien)}</td>
-          ${eqCells}
-        </tr>`;
-      }).join('');
-
-      return `
-        <div class="card shadow-sm mb-3">
-          <div class="card-header bg-light fw-semibold">
-            <i class="bi bi-building me-2 text-primary"></i>${escHtml(dept.departmentCode || dept.mapb)} – ${escHtml(dept.departmentName || dept.tenphongban)}
-            <span class="badge bg-primary ms-2">${(dept.employees||[]).length} NV</span>
-          </div>
-          <div class="card-body p-0">
-            <div class="table-responsive">
-              <table class="table table-sm align-middle mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th class="ps-3">Mã NV</th>
-                    <th>Họ tên</th>
-                    ${equipNames.map(n => `<th class="text-center small">${escHtml(n)}</th>`).join('')}
-                  </tr>
-                </thead>
-                <tbody>${empRows}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-  } else {
-    deptsHtml = '<div class="alert alert-info">Không có dữ liệu phòng ban.</div>';
-  }
-
-  container.innerHTML = summaryHtml + deptsHtml;
+  container.innerHTML = deptHtml + summaryHtml;
 }
 
 // ====================================================================

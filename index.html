@@ -277,53 +277,39 @@
 </div>
 
 <!-- TAB 5: BÁO CÁO -->
-<div id="tab-reports" class="tab-panel container-fluid py-3 px-4 d-none">
-  <div class="row g-3">
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-body py-2">
-          <div class="row g-2 align-items-end">
-            <div class="col-auto">
-              <label class="form-label small text-muted mb-1">Tháng</label>
-              <select class="form-select form-select-sm" id="rpt-month" style="width:80px">
-                <option value="01">01</option><option value="02">02</option>
-                <option value="03">03</option><option value="04">04</option>
-                <option value="05">05</option><option value="06">06</option>
-                <option value="07">07</option><option value="08">08</option>
-                <option value="09">09</option><option value="10">10</option>
-                <option value="11">11</option><option value="12">12</option>
-              </select>
-            </div>
-            <div class="col-auto">
-              <label class="form-label small text-muted mb-1">Năm</label>
-              <select class="form-select form-select-sm" id="rpt-year" style="width:100px"></select>
-            </div>
-            <div class="col-auto">
-              <button class="btn btn-primary btn-sm" id="rpt-load-btn">
-                <i class="bi bi-search me-1"></i>Xem báo cáo
-              </button>
-            </div>
-            <div class="col-auto">
-              <button class="btn btn-outline-success btn-sm" id="rpt-print-btn">
-                <i class="bi bi-printer me-1"></i>In báo cáo
-              </button>
-              <button class="btn btn-outline-primary btn-sm ms-1" id="rpt-print-total-btn">
-                <i class="bi bi-file-earmark-bar-graph me-1"></i>In tổng
-              </button>
-              <button class="btn btn-outline-secondary btn-sm ms-1" id="rpt-export-word-btn">
-                <i class="bi bi-file-earmark-word me-1"></i>Xuất Word
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+<div id="tab-reports" class="tab-panel d-none" style="height:calc(100vh - 96px);overflow:hidden;display:flex!important;flex-direction:column">
+  <!-- Toolbar -->
+  <div class="border-bottom bg-light px-3 py-2 d-flex align-items-center gap-2 flex-wrap flex-shrink-0">
+    <!-- Month nav -->
+    <button class="btn btn-outline-secondary btn-sm" id="rpt-prev-btn"><i class="bi bi-chevron-left"></i></button>
+    <div id="rpt-month-display" class="fw-bold px-2" style="min-width:120px;text-align:center;cursor:pointer;user-select:none" title="Click để chọn tháng">
+      <i class="bi bi-calendar3 me-1 text-primary"></i><span id="rpt-month-label">--/----</span>
     </div>
-    <div class="col-12">
-      <div id="rpt-loading" class="text-center py-5 d-none">
-        <div class="spinner-border text-primary" role="status"></div>
-      </div>
-      <div id="rpt-content"></div>
+    <button class="btn btn-outline-secondary btn-sm" id="rpt-next-btn"><i class="bi bi-chevron-right"></i></button>
+    <button class="btn btn-primary btn-sm" id="rpt-load-btn"><i class="bi bi-arrow-clockwise me-1"></i>Tải lại</button>
+    <div class="vr mx-1"></div>
+    <button class="btn btn-outline-success btn-sm" id="rpt-print-btn"><i class="bi bi-printer me-1"></i>In chi tiết</button>
+    <button class="btn btn-outline-primary btn-sm" id="rpt-print-total-btn"><i class="bi bi-file-earmark-bar-graph me-1"></i>In tổng hợp</button>
+    <button class="btn btn-outline-secondary btn-sm" id="rpt-export-word-btn"><i class="bi bi-file-earmark-word me-1"></i>Xuất Word</button>
+    <!-- Hidden inputs kept for compat -->
+    <input type="hidden" id="rpt-month" /><input type="hidden" id="rpt-year" />
+  </div>
+  <!-- Stats bar -->
+  <div id="rpt-stats-bar" class="border-bottom bg-white px-3 py-2 d-none flex-shrink-0">
+    <div class="d-flex gap-4 align-items-center small">
+      <span><i class="bi bi-building text-primary me-1"></i><strong id="rpt-stat-pb">0</strong> phòng ban</span>
+      <span><i class="bi bi-people text-success me-1"></i><strong id="rpt-stat-nv">0</strong> nhân viên</span>
+      <span><i class="bi bi-box-seam text-warning me-1"></i><strong id="rpt-stat-vt">0</strong> vật tư cấp</span>
+      <span class="ms-auto fw-semibold" id="rpt-stat-rate"></span>
     </div>
+  </div>
+  <!-- Content -->
+  <div class="flex-grow-1 overflow-auto">
+    <div id="rpt-loading" class="text-center py-5 d-none">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="text-muted mt-2">Đang tải...</p>
+    </div>
+    <div id="rpt-content" class="p-3"></div>
   </div>
 </div>
 
