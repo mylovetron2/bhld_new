@@ -270,3 +270,5 @@ body {
 /* Tab Cap Phat sidebar */
 .alloc-emp-item { cursor: pointer; transition: background .15s; }
 .alloc-emp-item:hover { background-color: rgba(13,110,253,.07) !important; }
+
+#tab-reports:not(.d-none) { display: flex !important; }
