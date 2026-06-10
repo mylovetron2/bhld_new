@@ -36,6 +36,7 @@ try {
         // Get list of certificates with filters
         else {
             $manv = isset($_GET['manv']) ? mysqli_real_escape_string($conn, $_GET['manv']) : '';
+            $emp_name_search = isset($_GET['emp_name_search']) ? mysqli_real_escape_string($conn, $_GET['emp_name_search']) : '';
             $mact_search = isset($_GET['mact_search']) ? mysqli_real_escape_string($conn, $_GET['mact_search']) : '';
             $from_date = isset($_GET['from_date']) ? mysqli_real_escape_string($conn, $_GET['from_date']) : '';
             $to_date = isset($_GET['to_date']) ? mysqli_real_escape_string($conn, $_GET['to_date']) : '';
@@ -56,6 +57,9 @@ try {
             
             if (!empty($manv)) {
                 $sql .= " AND ct.manv = '$manv'";
+            }
+            if (!empty($emp_name_search)) {
+                $sql .= " AND nv.tennhanvien LIKE '%$emp_name_search%'";
             }
             if (!empty($mact_search)) {
                 $sql .= " AND ct.mact LIKE '%$mact_search%'";

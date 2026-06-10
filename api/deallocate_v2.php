@@ -7,6 +7,14 @@
 
 require_once 'config.php';
 
+function columnExists($conn, $tableName, $columnName) {
+    $tableName = mysqli_real_escape_string($conn, $tableName);
+    $columnName = mysqli_real_escape_string($conn, $columnName);
+    $sql = "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$tableName' AND column_name = '$columnName' LIMIT 1";
+    $r = mysqli_query($conn, $sql);
+    return $r && mysqli_num_rows($r) > 0;
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'OPTIONS') {
@@ -53,11 +61,16 @@ try {
         }
         
         // Step 1: Update current record
-        $sql_update = "UPDATE bhld_ctctu 
-                      SET sl = 0, 
-                          ngnhan = '1911-11-11',
-                          ngnhantt = '1911-11-11'
-                      WHERE mact = '$mact' AND mavt = $mavt AND sl = 1";
+        $setParts = [
+            "sl = 0",
+            "ngnhan = '1911-11-11'",
+            "ngnhantt = '1911-11-11'",
+        ];
+        if (columnExists($conn, 'bhld_ctctu', 'so_luong_cap')) {
+            $setParts[] = 'so_luong_cap = 0';
+        }
+
+        $sql_update = "UPDATE bhld_ctctu SET " . implode(', ', $setParts) . " WHERE mact = '$mact' AND mavt = $mavt AND sl = 1";
         
         $update_result = mysqli_query($conn, $sql_update);
         

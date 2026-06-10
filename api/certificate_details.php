@@ -3,6 +3,14 @@ require_once 'config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+function columnExists($conn, $tableName, $columnName) {
+    $tableName = mysqli_real_escape_string($conn, $tableName);
+    $columnName = mysqli_real_escape_string($conn, $columnName);
+    $sql = "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$tableName' AND column_name = '$columnName' LIMIT 1";
+    $r = mysqli_query($conn, $sql);
+    return $r && mysqli_num_rows($r) > 0;
+}
+
 try {
     if ($method === 'GET') {
         if (!isset($_GET['mact'])) {
@@ -11,6 +19,16 @@ try {
         
         $mact = mysqli_real_escape_string($conn, $_GET['mact']);
         
+        $extraCols = [];
+        if (columnExists($conn, 'bhld_ctctu', 'so_luong_yeu_cau')) $extraCols[] = 'ct.so_luong_yeu_cau';
+        if (columnExists($conn, 'bhld_ctctu', 'so_luong_cap')) $extraCols[] = 'ct.so_luong_cap';
+        if (columnExists($conn, 'bhld_ctctu', 'size_label')) $extraCols[] = 'ct.size_label';
+        if (columnExists($conn, 'bhld_ctctu', 'mau_label')) $extraCols[] = 'ct.mau_label';
+        if (columnExists($conn, 'bhld_ctctu', 'loai_label')) $extraCols[] = 'ct.loai_label';
+        if (columnExists($conn, 'bhld_ctctu', 'quycach_label')) $extraCols[] = 'ct.quycach_label';
+
+        $selectExtra = empty($extraCols) ? '' : ', ' . implode(', ', $extraCols);
+
         $sql = "SELECT 
                     ct.mact,
                     ct.mavt,
@@ -20,6 +38,7 @@ try {
                     ct.ngnhantt,
                     vt.tenvt,
                     vt.dvt
+                    $selectExtra
                 FROM bhld_ctctu ct
                 LEFT JOIN bhld_dmvattu vt ON ct.mavt = vt.mavt
                 WHERE ct.mact = '$mact'
@@ -58,8 +77,46 @@ try {
             sendError('Chi tiết chứng từ đã tồn tại', 409);
         }
         
-        $sql = "INSERT INTO bhld_ctctu (mact, mavt, sl, ngnhan, ngnhantt, dmtg) 
-                VALUES ('$mact', $mavt, $sl, '$ngnhan', '$ngnhantt', $dmtg)";
+        $hasQtyRequired = columnExists($conn, 'bhld_ctctu', 'so_luong_yeu_cau');
+        $hasQtyIssued = columnExists($conn, 'bhld_ctctu', 'so_luong_cap');
+        $hasSize = columnExists($conn, 'bhld_ctctu', 'size_label');
+        $hasColor = columnExists($conn, 'bhld_ctctu', 'mau_label');
+        $hasType = columnExists($conn, 'bhld_ctctu', 'loai_label');
+        $hasSpec = columnExists($conn, 'bhld_ctctu', 'quycach_label');
+
+        $cols = ['mact', 'mavt', 'sl', 'ngnhan', 'ngnhantt', 'dmtg'];
+        $vals = ["'$mact'", $mavt, $sl, "'$ngnhan'", "'$ngnhantt'", $dmtg];
+
+        if ($hasQtyRequired && isset($data['so_luong_yeu_cau'])) {
+            $cols[] = 'so_luong_yeu_cau';
+            $vals[] = max(1, intval($data['so_luong_yeu_cau']));
+        }
+        if ($hasQtyIssued && isset($data['so_luong_cap'])) {
+            $cols[] = 'so_luong_cap';
+            $vals[] = max(0, intval($data['so_luong_cap']));
+        }
+        if ($hasSize && array_key_exists('size_label', $data)) {
+            $v = trim((string)$data['size_label']);
+            $cols[] = 'size_label';
+            $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
+        }
+        if ($hasColor && array_key_exists('mau_label', $data)) {
+            $v = trim((string)$data['mau_label']);
+            $cols[] = 'mau_label';
+            $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
+        }
+        if ($hasType && array_key_exists('loai_label', $data)) {
+            $v = trim((string)$data['loai_label']);
+            $cols[] = 'loai_label';
+            $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
+        }
+        if ($hasSpec && array_key_exists('quycach_label', $data)) {
+            $v = trim((string)$data['quycach_label']);
+            $cols[] = 'quycach_label';
+            $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
+        }
+
+        $sql = "INSERT INTO bhld_ctctu (" . implode(', ', $cols) . ") VALUES (" . implode(', ', $vals) . ")";
         
         if (mysqli_query($conn, $sql)) {
             sendSuccess(['mact' => $mact, 'mavt' => $mavt], 'Tạo chi tiết thành công');
@@ -100,6 +157,31 @@ try {
         if (isset($data['dmtg'])) {
             $dmtg = intval($data['dmtg']);
             $updates[] = "dmtg = $dmtg";
+        }
+
+        if (columnExists($conn, 'bhld_ctctu', 'so_luong_yeu_cau') && isset($data['so_luong_yeu_cau'])) {
+            $qtyRequired = max(1, intval($data['so_luong_yeu_cau']));
+            $updates[] = "so_luong_yeu_cau = $qtyRequired";
+        }
+        if (columnExists($conn, 'bhld_ctctu', 'so_luong_cap') && isset($data['so_luong_cap'])) {
+            $qtyIssued = max(0, intval($data['so_luong_cap']));
+            $updates[] = "so_luong_cap = $qtyIssued";
+        }
+        if (columnExists($conn, 'bhld_ctctu', 'size_label') && array_key_exists('size_label', $data)) {
+            $v = trim((string)$data['size_label']);
+            $updates[] = $v === '' ? "size_label = NULL" : "size_label = '" . mysqli_real_escape_string($conn, $v) . "'";
+        }
+        if (columnExists($conn, 'bhld_ctctu', 'mau_label') && array_key_exists('mau_label', $data)) {
+            $v = trim((string)$data['mau_label']);
+            $updates[] = $v === '' ? "mau_label = NULL" : "mau_label = '" . mysqli_real_escape_string($conn, $v) . "'";
+        }
+        if (columnExists($conn, 'bhld_ctctu', 'loai_label') && array_key_exists('loai_label', $data)) {
+            $v = trim((string)$data['loai_label']);
+            $updates[] = $v === '' ? "loai_label = NULL" : "loai_label = '" . mysqli_real_escape_string($conn, $v) . "'";
+        }
+        if (columnExists($conn, 'bhld_ctctu', 'quycach_label') && array_key_exists('quycach_label', $data)) {
+            $v = trim((string)$data['quycach_label']);
+            $updates[] = $v === '' ? "quycach_label = NULL" : "quycach_label = '" . mysqli_real_escape_string($conn, $v) . "'";
         }
         
         if (empty($updates)) {

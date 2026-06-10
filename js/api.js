@@ -19,6 +19,7 @@ async function apiFetch(endpoint, options = {}) {
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include',
     });
 
     if (response.status === 404) throw new Error('Không tìm thấy dữ liệu');
@@ -48,6 +49,22 @@ async function apiFetch(endpoint, options = {}) {
 }
 
 const API = {
+  // ===== AUTH =====
+  login(username, password) {
+    return apiFetch('/auth_login.php', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  },
+  logout() {
+    return apiFetch('/auth_logout.php', {
+      method: 'POST',
+    });
+  },
+  me() {
+    return apiFetch('/auth_me.php');
+  },
+
   // ===== ĐỊNH MỨC =====
   getDinhMuc() {
     return apiFetch('/dinhmuc.php');
@@ -57,6 +74,9 @@ const API = {
   getEmployees(search) {
     const params = search ? `?search=${encodeURIComponent(search)}` : '';
     return apiFetch(`/employees.php${params}`);
+  },
+  getEmployee(manv) {
+    return apiFetch(`/employees.php?manv=${encodeURIComponent(manv)}`);
   },
   addEmployee(employee) {
     return apiFetch('/employees.php', {
@@ -74,6 +94,39 @@ const API = {
     return apiFetch('/employees.php', {
       method: 'PUT',
       body: JSON.stringify(payload),
+    });
+  },
+  deleteEmployee(manv) {
+    return apiFetch('/employees.php', {
+      method: 'DELETE',
+      body: JSON.stringify({ manv }),
+    });
+  },
+
+  // ===== POLICY THEO NHAN VIEN =====
+  getEmployeePolicy(manv, includeInactive = false) {
+    const q = new URLSearchParams();
+    if (manv) q.set('manv', manv);
+    if (includeInactive) q.set('include_inactive', '1');
+    const qs = q.toString();
+    return apiFetch(`/employee_equipment_policy.php${qs ? '?' + qs : ''}`);
+  },
+  saveEmployeePolicyBatch(manv, items, sync = true) {
+    return apiFetch('/employee_equipment_policy.php', {
+      method: 'PUT',
+      body: JSON.stringify({ manv, items, sync: sync ? 1 : 0 }),
+    });
+  },
+  addEmployeePolicy(item) {
+    return apiFetch('/employee_equipment_policy.php', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+  },
+  disableEmployeePolicy(manv, mavt) {
+    return apiFetch('/employee_equipment_policy.php', {
+      method: 'DELETE',
+      body: JSON.stringify({ manv, mavt }),
     });
   },
 
@@ -135,6 +188,24 @@ const API = {
     const params = search ? `?search=${encodeURIComponent(search)}` : '';
     return apiFetch(`/equipment.php${params}`);
   },
+  addEquipment(item) {
+    return apiFetch('/equipment.php', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+  },
+  updateEquipment(item) {
+    return apiFetch('/equipment.php', {
+      method: 'PUT',
+      body: JSON.stringify(item),
+    });
+  },
+  deleteEquipment(mavt) {
+    return apiFetch('/equipment.php', {
+      method: 'DELETE',
+      body: JSON.stringify({ mavt }),
+    });
+  },
 
   // ===== CẤP PHÁT / TRẢ =====
   allocate(mact, mavt, ngnhan) {
@@ -183,5 +254,60 @@ const API = {
   // ===== BÁO CÁO THÁNG =====
   getMonthlyReport(month) {
     return apiFetch(`/monthly_report.php?month=${encodeURIComponent(month)}`);
+  },
+
+  // ===== BACKUP DATABASE =====
+  async downloadDatabaseBackup() {
+    const res = await fetch(`${API_BASE}/database_backup.php`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/sql,application/octet-stream,*/*' },
+    });
+
+    if (!res.ok) {
+      let msg = `Lỗi HTTP: ${res.status}`;
+      try {
+        const j = await res.json();
+        if (j && j.message) msg = j.message;
+      } catch (_) {
+        // Ignore non-json error body.
+      }
+      throw new Error(msg);
+    }
+
+    const blob = await res.blob();
+    const dispo = res.headers.get('Content-Disposition') || '';
+    const m = dispo.match(/filename="?([^";]+)"?/i);
+    const fileName = m && m[1] ? m[1] : `bhld_backup_${Date.now()}.sql`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    return { fileName };
+  },
+
+  async restoreDatabaseBackup(sqlFile, confirmText) {
+    const form = new FormData();
+    form.append('sql_file', sqlFile);
+    form.append('confirm', confirmText || '');
+
+    const res = await fetch(`${API_BASE}/database_restore.php`, {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.message || `Lỗi HTTP: ${res.status}`);
+    }
+    return data;
   },
 };

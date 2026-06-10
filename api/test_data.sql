@@ -44,7 +44,11 @@ INSERT INTO bhld_dmvattu (mavt, tenvt, dvt, ghichu) VALUES
 (102, 'Găng tay bảo hộ', 'đôi', 'Định mức: 6 tháng'),
 (103, 'Giày bảo hộ', 'đôi', 'Định mức: 12 tháng'),
 (104, 'Áo phản quang', 'cái', 'Định mức: 12 tháng'),
-(105, 'Mũ bảo hộ', 'cái', 'Định mức: 12 tháng')
+(105, 'Mũ bảo hộ', 'cái', 'Định mức: 12 tháng'),
+(106, 'Găng tay', 'đôi', 'Định mức theo nhân viên'),
+(107, 'Khẩu trang', 'cái', 'Định mức theo nhân viên'),
+(108, 'Áo phao cứu sinh', 'cái', 'Định mức theo nhân viên'),
+(109, 'Găng tay da thợ hàn', 'đôi', 'Định mức theo nhân viên')
 ON DUPLICATE KEY UPDATE tenvt = VALUES(tenvt);
 
 -- =====================================================

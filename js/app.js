@@ -18,6 +18,8 @@ const State = {
   lastReportData: null,
   lastReportMonthStr: null,
   dinhMucData: [], // cache danh sách định mức + chitiet
+  equipmentOptionsLoaded: false,
+  currentEmpPolicyRows: [],
 };
 
 // ===== UTILS =====
@@ -105,16 +107,24 @@ function initTabs() {
     link.addEventListener('click', e => {
       e.preventDefault();
       const tab = link.dataset.tab;
-      document.querySelectorAll('#mainTabs .nav-link').forEach(l => l.classList.remove('active'));
-      link.classList.add('active');
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('d-none'));
-      document.getElementById(`tab-${tab}`).classList.remove('d-none');
-      if (tab === 'certificates') initCertificatesTab();
-      if (tab === 'management') initManagementTab();
-      if (tab === 'employees') initEmployeesTab();
-      if (tab === 'reports') initReportsTab();
-      if (tab === 'changelog') initChangelogTab();
-      if (tab === 'allocate') initAllocateTab();
+      console.log('[DEBUG] Tab clicked:', tab);
+      try {
+        document.querySelectorAll('#mainTabs .nav-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('d-none'));
+        document.getElementById(`tab-${tab}`).classList.remove('d-none');
+        if (tab === 'certificates') initCertificatesTab();
+        if (tab === 'management') initManagementTab();
+        if (tab === 'employees') initEmployeesTab();
+        if (tab === 'equipment') initEquipmentTab();
+        if (tab === 'reports') initReportsTab();
+        if (tab === 'changelog') initChangelogTab();
+        if (tab === 'backup') initBackupTab();
+        if (tab === 'allocate') initAllocateTab();
+      } catch (err) {
+        console.error('[ERROR] Tab switching:', err);
+        showToast('Lỗi chuyển tab: ' + err.message, 'danger');
+      }
     });
   });
 }
@@ -138,6 +148,7 @@ async function initCertificatesTab() {
     document.getElementById('ct-search-btn').addEventListener('click', loadCertificates);
     document.getElementById('ct-clear-btn').addEventListener('click', () => {
       document.getElementById('ct-emp-select').value = '';
+      document.getElementById('ct-emp-name-search').value = '';
       document.getElementById('ct-mact-search').value = '';
       document.getElementById('ct-from-date').value = '';
       document.getElementById('ct-to-date').value = '';
@@ -176,6 +187,7 @@ async function loadCertificates() {
 
   const params = {
     manv: document.getElementById('ct-emp-select').value,
+    emp_name_search: document.getElementById('ct-emp-name-search').value,
     mact_search: document.getElementById('ct-mact-search').value,
     from_date: document.getElementById('ct-from-date').value,
     to_date: document.getElementById('ct-to-date').value,
@@ -738,6 +750,165 @@ document.getElementById('cdm-add-btn').addEventListener('click', () => {
 });
 
 // ====================================================================
+// TAB: DANH MUC VAT TU
+// ====================================================================
+let eqInitialized = false;
+let eqAllList = [];
+let eqCurrentEdit = null;
+
+function initEquipmentTab() {
+  if (!eqInitialized) {
+    eqInitialized = true;
+    document.getElementById('eq-search-btn').addEventListener('click', filterEquipmentTable);
+    document.getElementById('eq-search').addEventListener('keydown', e => {
+      if (e.key === 'Enter') filterEquipmentTable();
+    });
+    document.getElementById('eq-add-btn').addEventListener('click', () => openEquipmentModal(null));
+    document.getElementById('eq-reload-btn').addEventListener('click', () => loadEquipmentList());
+    document.getElementById('eq-save-btn').addEventListener('click', saveEquipment);
+    document.getElementById('equipmentModal').addEventListener('hidden.bs.modal', () => {
+      eqCurrentEdit = null;
+      document.getElementById('eq-mavt-input').disabled = false;
+      document.getElementById('eq-mavt-input').value = '';
+      document.getElementById('eq-tenvt-input').value = '';
+      document.getElementById('eq-dvt-input').value = '';
+      document.getElementById('eq-ghichu-input').value = '';
+    });
+  }
+  loadEquipmentList();
+}
+
+async function loadEquipmentList(search = '') {
+  setLoading('eq-loading', true);
+  document.getElementById('eq-empty').classList.add('d-none');
+  document.getElementById('eq-tbody').innerHTML = '';
+
+  try {
+    const res = await API.getEquipment(search);
+    if (res.success && Array.isArray(res.data)) {
+      eqAllList = res.data;
+      State.equipment = res.data;
+      renderEquipmentTable(eqAllList);
+    } else {
+      renderEquipmentTable([]);
+    }
+  } catch (err) {
+    showToast('Loi tai danh muc vat tu: ' + err.message, 'danger');
+    renderEquipmentTable([]);
+  } finally {
+    setLoading('eq-loading', false);
+  }
+}
+
+function filterEquipmentTable() {
+  const q = (document.getElementById('eq-search').value || '').trim().toLowerCase();
+  if (!q) {
+    renderEquipmentTable(eqAllList);
+    return;
+  }
+  const filtered = eqAllList.filter(item =>
+    (String(item.mavt || '')).toLowerCase().includes(q) ||
+    (item.tenvt || '').toLowerCase().includes(q) ||
+    (item.dvt || '').toLowerCase().includes(q) ||
+    (item.ghichu || '').toLowerCase().includes(q)
+  );
+  renderEquipmentTable(filtered);
+}
+
+function renderEquipmentTable(list) {
+  const tbody = document.getElementById('eq-tbody');
+  if (!list || !list.length) {
+    tbody.innerHTML = '';
+    document.getElementById('eq-empty').classList.remove('d-none');
+    return;
+  }
+
+  document.getElementById('eq-empty').classList.add('d-none');
+  tbody.innerHTML = list.map(item => `
+    <tr>
+      <td><span class="badge bg-primary bg-opacity-10 text-primary fw-semibold">${escHtml(item.mavt)}</span></td>
+      <td>${escHtml(item.tenvt || '')}</td>
+      <td>${escHtml(item.dvt || '')}</td>
+      <td class="text-muted small">${escHtml(item.ghichu || '')}</td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEquipmentModalByMavt(${item.mavt})">
+          <i class="bi bi-pencil"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="confirmDeleteEquipment(${item.mavt}, '${escHtml(item.tenvt || '')}')">
+          <i class="bi bi-trash"></i>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openEquipmentModalByMavt(mavt) {
+  const item = eqAllList.find(x => String(x.mavt) === String(mavt));
+  openEquipmentModal(item || null);
+}
+
+function openEquipmentModal(item) {
+  eqCurrentEdit = item;
+  document.getElementById('equipmentModalTitle').textContent = item ? 'Sửa vật tư' : 'Thêm vật tư';
+  document.getElementById('eq-mavt-input').value = item?.mavt || '';
+  document.getElementById('eq-mavt-input').disabled = !!item;
+  document.getElementById('eq-tenvt-input').value = item?.tenvt || '';
+  document.getElementById('eq-dvt-input').value = item?.dvt || '';
+  document.getElementById('eq-ghichu-input').value = item?.ghichu || '';
+  getModal('equipmentModal').show();
+}
+
+async function saveEquipment() {
+  const btn = document.getElementById('eq-save-btn');
+  const mavt = parseInt(document.getElementById('eq-mavt-input').value, 10);
+  const tenvt = document.getElementById('eq-tenvt-input').value.trim();
+  const dvt = document.getElementById('eq-dvt-input').value.trim();
+  const ghichu = document.getElementById('eq-ghichu-input').value.trim();
+
+  if (!Number.isFinite(mavt) || mavt <= 0 || !tenvt) {
+    showToast('Vui lòng nhập đầy đủ Mã VT và Tên vật tư', 'warning');
+    return;
+  }
+
+  const payload = { mavt, tenvt, dvt, ghichu };
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang lưu...';
+
+  try {
+    const res = eqCurrentEdit ? await API.updateEquipment(payload) : await API.addEquipment(payload);
+    if (res.success) {
+      showToast(eqCurrentEdit ? 'Cập nhật vật tư thành công' : 'Thêm vật tư thành công', 'success');
+      getModal('equipmentModal').hide();
+      await loadEquipmentList(document.getElementById('eq-search').value.trim());
+    } else {
+      showToast(res.message || 'Lưu vật tư thất bại', 'danger');
+    }
+  } catch (err) {
+    showToast('Lỗi: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function confirmDeleteEquipment(mavt, tenvt) {
+  showConfirm(`Xóa vật tư "${tenvt || mavt}"?`, async () => {
+    try {
+      const res = await API.deleteEquipment(mavt);
+      if (res.success) {
+        showToast('Đã xóa vật tư', 'success');
+        await loadEquipmentList(document.getElementById('eq-search').value.trim());
+      } else {
+        showToast(res.message || 'Xóa vật tư thất bại', 'danger');
+      }
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'danger');
+    }
+  });
+}
+
+// ====================================================================
 // TAB 3: NHÂN VIÊN
 // ====================================================================
 let empInitialized = false;
@@ -760,6 +931,8 @@ async function initEmployeesTab() {
     document.getElementById('emp-reload-btn').addEventListener('click', () => loadEmployees());
     document.getElementById('emp-add-btn').addEventListener('click', () => openEmpModal(null));
     document.getElementById('emp-save-btn').addEventListener('click', saveEmployee);
+    document.getElementById('emp-policy-add-row-btn').addEventListener('click', () => addEmpPolicyRow());
+    document.getElementById('emp-policy-from-dm-btn').addEventListener('click', applyPolicyFromCurrentDinhMuc);
     // Restore các field bị ẩn khi modal đóng
     document.getElementById('empModal').addEventListener('hidden.bs.modal', () => {
       ['emp-manv-input','emp-ten-input','emp-mapb-input'].forEach(id => {
@@ -767,9 +940,249 @@ async function initEmployeesTab() {
         if (el) { el.closest('.col-md-6').classList.remove('d-none'); el.disabled = false; }
       });
       document.getElementById('emp-first-ct-section').classList.remove('d-none');
+      State.currentEmpPolicyRows = [];
+      renderEmpPolicyRows([]);
     });
   }
   loadEmployees();
+}
+
+function setEmpProfileInputs(emp) {
+  document.getElementById('emp-giay-size').value = emp?.giay_size || '';
+  document.getElementById('emp-giay-loai').value = emp?.giay_loai || '';
+  document.getElementById('emp-quanao-size').value = emp?.quanao_size || '';
+  document.getElementById('emp-mu-mau').value = emp?.mu_mau || '';
+  document.getElementById('emp-hoso-ghichu').value = emp?.hoso_ghichu || emp?.ghi_chu || '';
+}
+
+function getEmpProfilePayload() {
+  return {
+    giay_size: document.getElementById('emp-giay-size').value.trim(),
+    giay_loai: document.getElementById('emp-giay-loai').value.trim(),
+    quanao_size: document.getElementById('emp-quanao-size').value.trim(),
+    mu_mau: document.getElementById('emp-mu-mau').value.trim(),
+    ghi_chu: document.getElementById('emp-hoso-ghichu').value.trim(),
+  };
+}
+
+async function ensureEquipmentOptionsLoaded() {
+  if (State.equipmentOptionsLoaded && State.equipment?.length) return;
+  const res = await API.getEquipment();
+  if (res.success && Array.isArray(res.data)) {
+    State.equipment = res.data;
+    State.equipmentOptionsLoaded = true;
+  }
+}
+
+function renderEmpPolicyRows(rows = []) {
+  const tbody = document.getElementById('emp-policy-tbody');
+  const list = Array.isArray(rows) ? rows : [];
+  State.currentEmpPolicyRows = list;
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr class="emp-policy-empty-row"><td colspan="6" class="text-center text-muted py-3">Chưa có định mức vật tư riêng cho nhân viên</td></tr>';
+    return;
+  }
+
+  const options = (State.equipment || []).map(eq => {
+    const label = `${escHtml(eq.tenvt || ('Mã ' + eq.mavt))}${eq.dvt ? ' (' + escHtml(eq.dvt) + ')' : ''}`;
+    return `<option value="${eq.mavt}">${label}</option>`;
+  }).join('');
+
+  tbody.innerHTML = list.map((row, idx) => `
+    <tr>
+      <td>
+        <select class="form-select form-select-sm" data-policy-field="mavt" data-policy-idx="${idx}">
+          <option value="">-- Chọn vật tư --</option>
+          ${options}
+        </select>
+      </td>
+      <td class="text-center">
+        <input type="number" min="0" class="form-control form-control-sm text-center" data-policy-field="dmuc_thang" data-policy-idx="${idx}" value="${Number.isFinite(parseInt(row.dmuc_thang, 10)) ? parseInt(row.dmuc_thang, 10) : 0}" />
+      </td>
+      <td class="text-center">
+        <input type="number" min="1" class="form-control form-control-sm text-center" data-policy-field="so_luong" data-policy-idx="${idx}" value="${Math.max(1, parseInt(row.so_luong || 1, 10))}" />
+      </td>
+      <td class="text-center">
+        <input type="checkbox" class="form-check-input" data-policy-field="active" data-policy-idx="${idx}" ${row.active === 0 ? '' : 'checked'} />
+      </td>
+      <td>
+        <input type="text" class="form-control form-control-sm" data-policy-field="ghi_chu" data-policy-idx="${idx}" value="${escHtml(row.ghi_chu || '')}" placeholder="Ghi chú" />
+      </td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-danger" type="button" onclick="removeEmpPolicyRow(${idx})"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>
+  `).join('');
+
+  list.forEach((row, idx) => {
+    const sel = tbody.querySelector(`select[data-policy-field="mavt"][data-policy-idx="${idx}"]`);
+    if (sel) sel.value = row.mavt != null ? String(row.mavt) : '';
+  });
+}
+
+function addEmpPolicyRow(init = {}) {
+  const next = [
+    ...(State.currentEmpPolicyRows || []),
+    {
+      mavt: init.mavt ?? '',
+      dmuc_thang: init.dmuc_thang ?? 0,
+      so_luong: init.so_luong ?? 1,
+      active: init.active ?? 1,
+      source_madm: init.source_madm ?? '',
+      ghi_chu: init.ghi_chu ?? '',
+    },
+  ];
+  renderEmpPolicyRows(next);
+}
+
+function removeEmpPolicyRow(idx) {
+  const next = (State.currentEmpPolicyRows || []).filter((_, i) => i !== idx);
+  renderEmpPolicyRows(next);
+}
+
+function applyPolicyFromCurrentDinhMuc() {
+  const madm = document.getElementById('emp-dinhmuc-input').value;
+  if (!madm) {
+    showToast('Vui lòng chọn định mức trước', 'warning');
+    return;
+  }
+
+  const dm = (State.dinhMucData || []).find(d => d.madm === madm);
+  if (!dm || !Array.isArray(dm.chitiet) || !dm.chitiet.length) {
+    showToast('Định mức không có chi tiết vật tư', 'warning');
+    return;
+  }
+
+  const merged = new Map((State.currentEmpPolicyRows || []).map(r => [parseInt(r.mavt, 10), r]));
+  dm.chitiet.forEach(r => {
+    const mavt = parseInt(r.mavt, 10);
+    if (!Number.isFinite(mavt) || mavt <= 0) return;
+    if (!merged.has(mavt)) {
+      merged.set(mavt, {
+        mavt,
+        dmuc_thang: parseInt(r.dmtg || 0, 10),
+        so_luong: 1,
+        active: 1,
+        source_madm: madm,
+        ghi_chu: '',
+      });
+    }
+  });
+
+  renderEmpPolicyRows(Array.from(merged.values()));
+  showToast('Đã nạp vật tư từ định mức vào danh sách policy', 'info');
+}
+
+function collectEmpPolicyRows() {
+  const tbody = document.getElementById('emp-policy-tbody');
+  const rows = [];
+  const trList = Array.from(tbody.querySelectorAll('tr')).filter(tr => !tr.classList.contains('emp-policy-empty-row'));
+
+  trList.forEach((tr, i) => {
+    const getEl = (field) => tr.querySelector(`[data-policy-field="${field}"][data-policy-idx="${i}"]`);
+    const mavt = parseInt(getEl('mavt')?.value || '', 10);
+    const dmuc = parseInt(getEl('dmuc_thang')?.value || '0', 10);
+    const soLuong = parseInt(getEl('so_luong')?.value || '1', 10);
+    const active = getEl('active')?.checked ? 1 : 0;
+    const ghiChu = (getEl('ghi_chu')?.value || '').trim();
+
+    if (!Number.isFinite(mavt) || mavt <= 0) return;
+    rows.push({
+      mavt,
+      dmuc_thang: Math.max(0, Number.isFinite(dmuc) ? dmuc : 0),
+      so_luong: Math.max(1, Number.isFinite(soLuong) ? soLuong : 1),
+      active,
+      source_madm: document.getElementById('emp-dinhmuc-input').value.trim() || '',
+      ghi_chu: ghiChu,
+    });
+  });
+
+  const uniq = new Map();
+  rows.forEach(r => uniq.set(r.mavt, r));
+  return Array.from(uniq.values());
+}
+
+function normalizeVietnameseText(s) {
+  return (s || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+}
+
+function getAutoLabelsForEquipment(mavt, profilePayload) {
+  const eq = (State.equipment || []).find(x => String(x.mavt) === String(mavt));
+  const name = normalizeVietnameseText(eq?.tenvt || '');
+
+  const isShoes = name.includes('giay') || name.includes('ung');
+  const isClothes = name.includes('quan ao') || name.includes('ao') || name.includes('quan');
+  const isHelmet = name.includes('mu') || name.includes('non');
+
+  let sizeLabel = '';
+  let mauLabel = '';
+  let loaiLabel = '';
+
+  if (isShoes) {
+    sizeLabel = profilePayload.giay_size || '';
+    loaiLabel = profilePayload.giay_loai || '';
+  }
+  if (isClothes) {
+    sizeLabel = profilePayload.quanao_size || sizeLabel;
+  }
+  if (isHelmet) {
+    mauLabel = profilePayload.mu_mau || '';
+  }
+
+  if (!sizeLabel && !mauLabel && !loaiLabel) {
+    sizeLabel = profilePayload.quanao_size || profilePayload.giay_size || '';
+    mauLabel = profilePayload.mu_mau || '';
+    loaiLabel = profilePayload.giay_loai || '';
+  }
+
+  return { size_label: sizeLabel, mau_label: mauLabel, loai_label: loaiLabel };
+}
+
+function buildEmpProfileSummary(emp) {
+  const parts = [];
+  if (emp.giay_size || emp.giay_loai) {
+    const giay = [emp.giay_size ? `size ${escHtml(emp.giay_size)}` : '', emp.giay_loai ? escHtml(emp.giay_loai) : '']
+      .filter(Boolean)
+      .join(' - ');
+    parts.push(`<span class="badge bg-info-subtle text-info-emphasis me-1">Giày: ${giay}</span>`);
+  }
+  if (emp.quanao_size) {
+    parts.push(`<span class="badge bg-warning-subtle text-warning-emphasis me-1">Quần áo: ${escHtml(emp.quanao_size)}</span>`);
+  }
+  if (emp.mu_mau) {
+    parts.push(`<span class="badge bg-success-subtle text-success-emphasis me-1">Mũ: ${escHtml(emp.mu_mau)}</span>`);
+  }
+  if (emp.hoso_ghichu) {
+    parts.push(`<span class="text-muted small" title="${escHtml(emp.hoso_ghichu)}"><i class="bi bi-chat-left-text"></i></span>`);
+  }
+  return parts.length ? parts.join('') : '<span class="text-muted">—</span>';
+}
+
+async function loadEmployeePolicyForModal(manv) {
+  try {
+    const res = await API.getEmployeePolicy(manv, true);
+    if (res.success && Array.isArray(res.data)) {
+      renderEmpPolicyRows(res.data.map(r => ({
+        mavt: parseInt(r.mavt, 10),
+        dmuc_thang: parseInt(r.dmuc_thang || 0, 10),
+        so_luong: parseInt(r.so_luong || 1, 10),
+        active: parseInt(r.active || 0, 10) ? 1 : 0,
+        source_madm: r.source_madm || '',
+        ghi_chu: r.ghi_chu || '',
+      })));
+      return;
+    }
+  } catch (err) {
+    showToast('Không tải được định mức riêng: ' + err.message, 'warning');
+  }
+  renderEmpPolicyRows([]);
 }
 
 function applyEmpFilter() {
@@ -834,6 +1247,7 @@ function renderEmployeeTable(list) {
       <td>${escHtml(emp.mapb)}</td>
       <td>${escHtml(emp.tenphongban || '—')}</td>
       <td>${emp.dinhmuc ? `<span class="badge bg-secondary">${escHtml(emp.dinhmuc)}</span>` : '—'}</td>
+      <td>${buildEmpProfileSummary(emp)}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-info me-1" onclick="openEmpHistory('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')">
           <i class="bi bi-clock-history"></i> Lịch sử
@@ -841,10 +1255,28 @@ function renderEmployeeTable(list) {
         <button class="btn btn-sm btn-outline-primary me-1" onclick="openEmpModalByIdx(${idx})">
           <i class="bi bi-pencil"></i> Sửa
         </button>
-
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')">
+          <i class="bi bi-trash"></i> Xóa
+        </button>
       </td>
     </tr>`;
   }).join('');
+}
+
+function deleteEmployee(manv, tennhanvien) {
+  showConfirm(`Xác nhận xóa nhân viên "${tennhanvien}" (${manv})?<br><small class="text-danger">Lưu ý: Không thể xóa nếu còn chứng từ liên quan.</small>`, async () => {
+    try {
+      const res = await API.deleteEmployee(manv);
+      if (res.success) {
+        showToast('Đã xóa nhân viên thành công', 'success');
+        loadEmployees();
+      } else {
+        showToast(res.message || 'Xóa thất bại', 'danger');
+      }
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'danger');
+    }
+  });
 }
 
 function openEmpModal(emp) {
@@ -853,6 +1285,7 @@ function openEmpModal(emp) {
   document.getElementById('emp-manv-input').value = emp?.manv || '';
   document.getElementById('emp-manv-input').disabled = !!emp;
   document.getElementById('emp-ten-input').value = emp?.tennhanvien || '';
+  setEmpProfileInputs(emp || null);
 
   const modalPbSel = document.getElementById('emp-mapb-input');
   const dmSel = document.getElementById('emp-dinhmuc-input');
@@ -891,25 +1324,49 @@ function openEmpModal(emp) {
       }).catch(() => {})
     : Promise.resolve();
 
-  Promise.all([loadPb, loadDm]).then(() => {
+  const loadEquipment = ensureEquipmentOptionsLoaded().catch(() => {});
+  const loadDetail = emp?.manv
+    ? API.getEmployee(emp.manv).then(res => {
+        if (res.success && res.data) {
+          document.getElementById('emp-ten-input').value = res.data.tennhanvien || emp.tennhanvien || '';
+          setEmpProfileInputs(res.data);
+        }
+      }).catch(() => {})
+    : Promise.resolve();
+
+  Promise.all([loadPb, loadDm, loadEquipment, loadDetail]).then(async () => {
     setValues();
     document.getElementById('emp-first-ct-date').value = today();
+    document.getElementById('emp-quick-ct-date').value = today();
+    document.getElementById('emp-quick-ct-sl').value = 1;
+    document.getElementById('emp-quick-ct-dmtg').value = 12;
+    document.getElementById('emp-quick-ct-check').checked = false;
+    renderQuickCtEquipmentOptions();
     if (!emp) {
       // Thêm mới: auto check cấp phát lần đầu, hiện ngày
       document.getElementById('emp-create-ct-check').checked = true;
       document.getElementById('emp-first-ct-date-row').classList.remove('d-none');
       document.getElementById('emp-first-ct-section').classList.remove('d-none');
+      document.getElementById('emp-quick-ct-section').classList.add('d-none');
     } else {
-      // Sửa: ẩn section cấp phát lần đầu
+      // Sửa: vẫn cho phép tạo chứng từ mới nếu người dùng muốn
       document.getElementById('emp-create-ct-check').checked = false;
       document.getElementById('emp-first-ct-date-row').classList.add('d-none');
-      document.getElementById('emp-first-ct-section').classList.add('d-none');
+      document.getElementById('emp-first-ct-section').classList.remove('d-none');
+      document.getElementById('emp-quick-ct-section').classList.remove('d-none');
+      toggleQuickCtFields(false);
     }
     // Preview vật tư nếu đã có định mức
     if (document.getElementById('emp-dinhmuc-input').value) {
       onDinhMucChange(document.getElementById('emp-dinhmuc-input').value);
     } else {
       document.getElementById('emp-dm-preview').classList.add('d-none');
+    }
+
+    if (emp?.manv) {
+      await loadEmployeePolicyForModal(emp.manv);
+    } else {
+      renderEmpPolicyRows([]);
     }
   });
   getModal('empModal').show();
@@ -941,6 +1398,54 @@ function toggleFirstCtDate(checked) {
   document.getElementById('emp-first-ct-date-row').classList.toggle('d-none', !checked);
 }
 
+function toggleQuickCtFields(checked) {
+  const wrap = document.getElementById('emp-quick-ct-fields');
+  if (wrap) wrap.classList.toggle('d-none', !checked);
+}
+
+function renderQuickCtEquipmentOptions(selectedValue = '') {
+  const select = document.getElementById('emp-quick-ct-mavt');
+  if (!select) return;
+
+  const current = String(selectedValue || '');
+  const options = (State.equipment || []).map(eq => {
+    const value = String(eq.mavt ?? '');
+    const text = [eq.tenvt || `Mã: ${value}`, eq.dvt ? `(${eq.dvt})` : ''].filter(Boolean).join(' ');
+    return `<option value="${escHtml(value)}" ${value === current ? 'selected' : ''}>${escHtml(text)}</option>`;
+  }).join('');
+
+  select.innerHTML = '<option value="">-- Chọn vật tư --</option>' + options;
+}
+
+function buildQuickCtMact(ngct, mapb, manv, mavt) {
+  const ym = (ngct || today()).substring(0, 7);
+  const manvFmt = /^\d{4}$/.test(String(manv)) ? '0' + manv : String(manv);
+  const stamp = String(Date.now()).slice(-6);
+  return `${ym}-${mapb}-${manvFmt}-VT${mavt}-${stamp}`;
+}
+
+function buildCtVattuItem(mavt, dmtg, soLuong, profilePayload) {
+  const labels = getAutoLabelsForEquipment(mavt, profilePayload);
+  const quycach = [
+    labels.size_label ? `Size ${labels.size_label}` : '',
+    labels.mau_label ? `Mau ${labels.mau_label}` : '',
+    labels.loai_label ? `Loai ${labels.loai_label}` : '',
+  ].filter(Boolean).join(' - ');
+
+  return {
+    mavt: String(mavt),
+    dmtg: parseInt(dmtg, 10) || 0,
+    so_luong: Math.max(1, parseInt(soLuong, 10) || 1),
+    size: labels.size_label,
+    mau: labels.mau_label,
+    loai: labels.loai_label,
+    quycach,
+    size_label: labels.size_label,
+    mau_label: labels.mau_label,
+    loai_label: labels.loai_label,
+  };
+}
+
 function openFirstAllocateModal(manv, tennhanvien, mapb, dinhmuc) {
   // Mở modal ở chế độ "cấp lần đầu" cho NV đã có
   const emp = { manv, tennhanvien, mapb, dinhmuc, isFirstAllocate: true };
@@ -954,6 +1459,7 @@ function openFirstAllocateModal(manv, tennhanvien, mapb, dinhmuc) {
   document.getElementById('emp-manv-input').closest('.col-md-6').classList.add('d-none');
   document.getElementById('emp-ten-input').closest('.col-md-6').classList.add('d-none');
   document.getElementById('emp-mapb-input').closest('.col-md-6').classList.add('d-none');
+  document.getElementById('emp-quick-ct-section').classList.add('d-none');
 
   const dmSel = document.getElementById('emp-dinhmuc-input');
   const doOpen = () => {
@@ -991,6 +1497,7 @@ function openEmpEditName(manv, tennhanvien) {
   document.getElementById('emp-ten-input').value = tennhanvien;
   document.getElementById('emp-mapb-input').value = '';
   document.getElementById('emp-dinhmuc-input').value = '';
+  document.getElementById('emp-quick-ct-section').classList.add('d-none');
   // Hide irrelevant fields
   getModal('empModal').show();
 }
@@ -998,6 +1505,7 @@ function openEmpEditName(manv, tennhanvien) {
 async function saveEmployee() {
   const btn = document.getElementById('emp-save-btn');
   const emp = State.currentEmpEdit;
+  const profilePayload = getEmpProfilePayload();
 
   if (emp?.isNameOnlyEdit) {
     const newName = document.getElementById('emp-ten-input').value.trim();
@@ -1040,7 +1548,26 @@ async function saveEmployee() {
       const vattu = [];
       slInputs.forEach(inp => {
         const qty = parseInt(inp.value) || 0;
-        if (qty > 0) vattu.push({ mavt: inp.dataset.mavt, dmtg: parseInt(inp.dataset.dmtg)||0 });
+        if (qty > 0) {
+          const labels = getAutoLabelsForEquipment(inp.dataset.mavt, profilePayload);
+          const quycach = [
+            labels.size_label ? `Size ${labels.size_label}` : '',
+            labels.mau_label ? `Mau ${labels.mau_label}` : '',
+            labels.loai_label ? `Loai ${labels.loai_label}` : '',
+          ].filter(Boolean).join(' - ');
+          vattu.push({
+            mavt: inp.dataset.mavt,
+            dmtg: parseInt(inp.dataset.dmtg) || 0,
+            so_luong: qty,
+            size: labels.size_label,
+            mau: labels.mau_label,
+            loai: labels.loai_label,
+            quycach,
+            size_label: labels.size_label,
+            mau_label: labels.mau_label,
+            loai_label: labels.loai_label,
+          });
+        }
       });
       if (vattu.length === 0) { showToast('Vui lòng chọn ít nhất 1 vật tư (SL > 0)', 'warning'); btn.disabled = false; return; }
       const allocRes = await API.allocateFirst({ mact, manv: emp.manv, ngct, mapb: emp.mapb, madm: dinhmuc, vattu });
@@ -1063,6 +1590,7 @@ async function saveEmployee() {
   const tennhanvien = document.getElementById('emp-ten-input').value.trim();
   const mapb = document.getElementById('emp-mapb-input').value.trim();
   const dinhmuc = document.getElementById('emp-dinhmuc-input').value.trim();
+  const policyRows = collectEmpPolicyRows();
 
   if (!manv || !tennhanvien || !mapb) {
     showToast('Vui lòng điền Mã NV, Tên và Mã PB', 'warning');
@@ -1073,12 +1601,68 @@ async function saveEmployee() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
   try {
-    const payload = { manv, tennhanvien, mapb, dinhmuc: dinhmuc || '' };
+    const payload = {
+      manv,
+      tennhanvien,
+      mapb,
+      dinhmuc: dinhmuc || '',
+      giay_size: profilePayload.giay_size,
+      giay_loai: profilePayload.giay_loai,
+      quanao_size: profilePayload.quanao_size,
+      mu_mau: profilePayload.mu_mau,
+      ghi_chu: profilePayload.ghi_chu,
+    };
     const isEdit = !!emp; // emp đã có = đang sửa
     const res = isEdit ? await API.updateEmployee(payload) : await API.addEmployee(payload);
     if (res.success) {
-      // Tạo CT lần đầu nếu checkbox được chọn (chỉ khi thêm mới)
-      const createCt = !isEdit && document.getElementById('emp-create-ct-check')?.checked;
+      let policyWarn = '';
+      try {
+        const policyRes = await API.saveEmployeePolicyBatch(manv, policyRows, true);
+        if (!policyRes.success) {
+          policyWarn = ' Lưu định mức riêng chưa thành công.';
+        }
+      } catch (policyErr) {
+        policyWarn = ' Lưu định mức riêng lỗi: ' + policyErr.message;
+      }
+
+      // Cấp phát nhanh đúng 1 vật tư cho nhân viên cũ
+      const quickCt = document.getElementById('emp-quick-ct-check')?.checked;
+      if (quickCt) {
+        const quickMavt = document.getElementById('emp-quick-ct-mavt').value.trim();
+        const quickQty = parseInt(document.getElementById('emp-quick-ct-sl').value, 10) || 1;
+        const quickDmtg = parseInt(document.getElementById('emp-quick-ct-dmtg').value, 10) || 0;
+        const quickNgct = document.getElementById('emp-quick-ct-date').value || today();
+
+        if (!quickMavt) {
+          showToast('Vui lòng chọn vật tư cần cấp phát', 'warning');
+          btn.disabled = false;
+          btn.innerHTML = origText;
+          return;
+        }
+
+        const mact = buildQuickCtMact(quickNgct, mapb, manv, quickMavt);
+        const vattu = [buildCtVattuItem(quickMavt, quickDmtg, quickQty, profilePayload)];
+        const madmManual = dinhmuc || 'MANUAL';
+
+        try {
+          const allocRes = await API.allocateFirst({ mact, manv, ngct: quickNgct, mapb, madm: madmManual, vattu });
+          if (allocRes.success) {
+            showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư.${policyWarn}`.trim(), 'success');
+            getModal('empModal').hide();
+          } else {
+            showToast('Lưu NV OK nhưng cấp phát nhanh lỗi: ' + (allocRes.message || '') + policyWarn, 'warning');
+          }
+        } catch (quickErr) {
+          showToast('Lỗi cấp phát nhanh: ' + quickErr.message, 'danger');
+        }
+
+        loadEmployees();
+        loadEmployeesForSelect();
+        return;
+      }
+
+      // Tạo CT mới nếu checkbox được chọn, áp dụng cho cả nhân viên mới và cũ
+      const createCt = document.getElementById('emp-create-ct-check')?.checked;
       if (createCt && dinhmuc) {
         const ngct = document.getElementById('emp-first-ct-date').value || today();
         const ym = ngct.substring(0, 7);
@@ -1088,16 +1672,18 @@ async function saveEmployee() {
         const vattu = [];
         slInputs.forEach(inp => {
           const qty = parseInt(inp.value) || 0;
-          if (qty > 0) vattu.push({ mavt: inp.dataset.mavt, dmtg: parseInt(inp.dataset.dmtg)||0 });
+          if (qty > 0) {
+            vattu.push(buildCtVattuItem(inp.dataset.mavt, inp.dataset.dmtg, qty, profilePayload));
+          }
         });
         const allocRes = await API.allocateFirst({ mact, manv, ngct, mapb, madm: dinhmuc, vattu });
         if (allocRes.success) {
-          showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư`, 'success');
+          showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư.${policyWarn}`.trim(), 'success');
         } else {
-          showToast('Lưu NV OK nhưng cấp phát lỗi: ' + (allocRes.message||''), 'warning');
+          showToast('Lưu NV OK nhưng cấp phát lỗi: ' + (allocRes.message||'') + policyWarn, 'warning');
         }
       } else {
-        showToast('Thêm nhân viên thành công!', 'success');
+        showToast((isEdit ? 'Cập nhật nhân viên thành công!' : 'Thêm nhân viên thành công!') + policyWarn, policyWarn ? 'warning' : 'success');
       }
       getModal('empModal').hide();
       loadEmployees();
@@ -1564,11 +2150,11 @@ async function printCertificate(mact) {
 const EQUIP_COLS = [
   { key: 'Giày',    label: 'Giày' },
   { key: 'Mũ',      label: 'Mũ' },
-  { key: 'Áo quần', label: 'Quần<br>áo' },
+  { key: 'Áo quần', label: 'Quần áo' },
   { key: 'Kính',    label: 'Kính' },
-  { key: 'Áo mưa',  label: 'Áo<br>mưa' },
-  { key: 'Nút tai', label: 'Nút<br>tai' },
-  { key: 'Phim',    label: 'Phin<br>Lọc' },
+  { key: 'Áo mưa',  label: 'Áo mưa' },
+  { key: 'Nút tai', label: 'Nút tai' },
+  { key: 'Phim',    label: 'Phin Lọc' },
 ];
 
 function printMonthlySummary() {
@@ -1719,48 +2305,57 @@ let clInitialized = false;
 let clCurrentPage = 1;
 
 function initChangelogTab() {
-  if (!clInitialized) {
-    clInitialized = true;
-    document.getElementById('cl-search-btn').addEventListener('click', () => {
-      clCurrentPage = 1;
-      loadChangelog();
-    });
-    document.getElementById('cl-clear-btn').addEventListener('click', () => {
-      document.getElementById('cl-id').value = '';
-      document.getElementById('cl-action').value = '';
-      document.getElementById('cl-table').value = 'bhld_ctu';
-      document.getElementById('cl-from-date').value = '';
-      document.getElementById('cl-to-date').value = '';
-      clCurrentPage = 1;
-      loadChangelog();
-    });
-    document.getElementById('cl-table').addEventListener('change', () => {
-      clCurrentPage = 1;
-      loadChangelog();
-    });
+  console.log('[DEBUG] initChangelogTab called');
+  try {
+    if (!clInitialized) {
+      clInitialized = true;
+      document.getElementById('cl-search-btn').addEventListener('click', () => {
+        clCurrentPage = 1;
+        loadChangelog();
+      });
+      document.getElementById('cl-clear-btn').addEventListener('click', () => {
+        document.getElementById('cl-id').value = '';
+        document.getElementById('cl-action').value = '';
+        document.getElementById('cl-table').value = 'bhld_ctu';
+        document.getElementById('cl-from-date').value = '';
+        document.getElementById('cl-to-date').value = '';
+        clCurrentPage = 1;
+        loadChangelog();
+      });
+      document.getElementById('cl-table').addEventListener('change', () => {
+        clCurrentPage = 1;
+        loadChangelog();
+      });
+    }
+    loadChangelog();
+  } catch (err) {
+    console.error('[ERROR] initChangelogTab:', err);
+    showToast('Lỗi khởi tạo tab Lịch sử: ' + err.message, 'danger');
   }
-  loadChangelog();
 }
 
 async function loadChangelog() {
-  setLoading('cl-loading', true);
-  document.getElementById('cl-tbody').innerHTML = '';
-  document.getElementById('cl-empty').classList.add('d-none');
-  document.getElementById('cl-pagination').innerHTML = '';
-  document.getElementById('cl-stats').textContent = '';
-
-  const params = {
-    table:     document.getElementById('cl-table').value,
-    id:        document.getElementById('cl-id').value.trim(),
-    action:    document.getElementById('cl-action').value,
-    from_date: document.getElementById('cl-from-date').value,
-    to_date:   document.getElementById('cl-to-date').value,
-    limit:     document.getElementById('cl-limit').value,
-    page:      clCurrentPage,
-  };
-
+  console.log('[DEBUG] loadChangelog called');
   try {
+    setLoading('cl-loading', true);
+    document.getElementById('cl-tbody').innerHTML = '';
+    document.getElementById('cl-empty').classList.add('d-none');
+    document.getElementById('cl-pagination').innerHTML = '';
+    document.getElementById('cl-stats').textContent = '';
+
+    const params = {
+      table:     document.getElementById('cl-table').value,
+      id:        document.getElementById('cl-id').value.trim(),
+      action:    document.getElementById('cl-action').value,
+      from_date: document.getElementById('cl-from-date').value,
+      to_date:   document.getElementById('cl-to-date').value,
+      limit:     document.getElementById('cl-limit').value,
+      page:      clCurrentPage,
+    };
+
+    console.log('[DEBUG] loadChangelog params:', params);
     const res = await API.getChangeHistory(params);
+    console.log('[DEBUG] loadChangelog response:', res);
     setLoading('cl-loading', false);
     if (!res.success) { showToast(res.message || 'Lỗi tải dữ liệu', 'danger'); return; }
     if (!res.data.table_exists && res.data.table_exists === false) {
@@ -1818,6 +2413,7 @@ async function loadChangelog() {
       document.getElementById('cl-pagination').innerHTML = pHtml;
     }
   } catch (err) {
+    console.error('[ERROR] loadChangelog:', err);
     setLoading('cl-loading', false);
     showToast('Lỗi: ' + err.message, 'danger');
   }
@@ -1826,6 +2422,107 @@ async function loadChangelog() {
 function clGoPage(p) {
   clCurrentPage = p;
   loadChangelog();
+}
+
+// ====================================================================
+// TAB: BACKUP DATABASE
+// ====================================================================
+let bkInitialized = false;
+
+function updateBackupStamp(text) {
+  const badge = document.getElementById('bk-last-run');
+  if (badge) badge.textContent = text;
+}
+
+function setBackupStatus(msg, type = 'muted') {
+  const el = document.getElementById('bk-status');
+  if (!el) return;
+  const cls = type === 'danger' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-muted';
+  el.className = `mt-3 small ${cls}`;
+  el.textContent = msg;
+}
+
+function setBackupRestoreStatus(msg, type = 'muted') {
+  const el = document.getElementById('bk-restore-status');
+  if (!el) return;
+  const cls = type === 'danger' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-muted';
+  el.className = `mt-2 small ${cls}`;
+  el.textContent = msg;
+}
+
+function initBackupTab() {
+  if (!bkInitialized) {
+    bkInitialized = true;
+    const dlBtn = document.getElementById('bk-download-btn');
+    const rfBtn = document.getElementById('bk-refresh-btn');
+    const rsBtn = document.getElementById('bk-restore-btn');
+    const rsFile = document.getElementById('bk-restore-file');
+    const rsConfirm = document.getElementById('bk-restore-confirm');
+
+    dlBtn.addEventListener('click', async () => {
+      const oldHtml = dlBtn.innerHTML;
+      dlBtn.disabled = true;
+      dlBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo backup...';
+      setBackupStatus('Đang tạo file backup, vui lòng chờ...', 'muted');
+      try {
+        const res = await API.downloadDatabaseBackup();
+        const stamp = new Date().toLocaleString('vi-VN');
+        updateBackupStamp(`Đã backup: ${stamp}`);
+        setBackupStatus(`Tải thành công: ${res.fileName}`, 'success');
+        showToast('Tải file backup thành công', 'success');
+      } catch (err) {
+        setBackupStatus('Backup thất bại: ' + err.message, 'danger');
+        showToast('Lỗi backup: ' + err.message, 'danger');
+      } finally {
+        dlBtn.disabled = false;
+        dlBtn.innerHTML = oldHtml;
+      }
+    });
+
+    rfBtn.addEventListener('click', () => {
+      const stamp = new Date().toLocaleString('vi-VN');
+      updateBackupStamp(`Mốc hiện tại: ${stamp}`);
+      setBackupStatus('Sẵn sàng tạo backup.', 'muted');
+    });
+
+    rsBtn.addEventListener('click', async () => {
+      const f = rsFile?.files?.[0];
+      const confirmText = (rsConfirm?.value || '').trim();
+      if (!f) {
+        setBackupRestoreStatus('Vui lòng chọn file .sql', 'danger');
+        return;
+      }
+      if (confirmText !== 'RESTORE') {
+        setBackupRestoreStatus('Vui lòng nhập đúng từ xác nhận RESTORE', 'danger');
+        return;
+      }
+
+      const ack = window.confirm('Bạn chắc chắn muốn KHÔI PHỤC database từ file SQL này?');
+      if (!ack) return;
+
+      const oldHtml = rsBtn.innerHTML;
+      rsBtn.disabled = true;
+      rsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang khôi phục...';
+      setBackupRestoreStatus('Đang xử lý restore. Không đóng trang...', 'muted');
+
+      try {
+        const res = await API.restoreDatabaseBackup(f, confirmText);
+        const at = res?.data?.restored_at || new Date().toLocaleString('vi-VN');
+        updateBackupStamp(`Đã restore: ${at}`);
+        setBackupRestoreStatus('Khôi phục thành công', 'success');
+        showToast('Khôi phục database thành công', 'success');
+      } catch (err) {
+        setBackupRestoreStatus('Khôi phục thất bại: ' + err.message, 'danger');
+        showToast('Lỗi restore: ' + err.message, 'danger');
+      } finally {
+        rsBtn.disabled = false;
+        rsBtn.innerHTML = oldHtml;
+      }
+    });
+  }
+
+  setBackupStatus('Sẵn sàng tạo backup.', 'muted');
+  setBackupRestoreStatus('Sẵn sàng khôi phục khi có file SQL hợp lệ.', 'muted');
 }
 
 // ====================================================================
@@ -2058,7 +2755,39 @@ async function doAllocateBulk() {
 // ====================================================================
 // INIT
 // ====================================================================
-document.addEventListener('DOMContentLoaded', () => {
+async function ensureLogin() {
+  try {
+    const me = await API.me();
+    if (me && me.success) return true;
+  } catch (_) {
+    // Chưa đăng nhập, sẽ hiện prompt login bên dưới.
+  }
+
+  while (true) {
+    const username = window.prompt('Tài khoản:');
+    if (username === null) return false;
+
+    const password = window.prompt('Mật khẩu:');
+    if (password === null) return false;
+
+    try {
+      const res = await API.login(username, password);
+      if (res && res.success) {
+        showToast('Đăng nhập thành công', 'success');
+        return true;
+      }
+    } catch (_) {
+      // Sai thông tin hoặc lỗi mạng.
+    }
+
+    window.alert('Sai tài khoản hoặc mật khẩu');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const ok = await ensureLogin();
+  if (!ok) return;
+
   initTabs();
   initCertificatesTab();
 });

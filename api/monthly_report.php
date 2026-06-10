@@ -1,6 +1,40 @@
 <?php
 require_once 'config.php';
 
+function columnExists($conn, $tableName, $columnName) {
+    $tableName = mysqli_real_escape_string($conn, $tableName);
+    $columnName = mysqli_real_escape_string($conn, $columnName);
+    $sql = "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$tableName' AND column_name = '$columnName' LIMIT 1";
+    $r = mysqli_query($conn, $sql);
+    return $r && mysqli_num_rows($r) > 0;
+}
+
+function detectEquipmentBucket($name) {
+    $name = mb_strtolower((string)$name, 'UTF-8');
+    $rules = [
+        'Giày' => ['giay'],
+        'Mũ' => ['mu'],
+        'Áo quần' => ['ao quan', 'quan ao'],
+        'Kính' => ['kinh'],
+        'Áo mưa' => ['ao mua'],
+        'Nút tai' => ['nut tai'],
+        'Phim' => ['phin', 'phim'],
+        'Găng tay' => ['gang tay'],
+        'Khẩu trang' => ['khau trang'],
+        'Áo phao cứu sinh' => ['ao phao', 'cuu sinh'],
+        'Găng tay da thợ hàn' => ['gang tay da', 'tho han'],
+    ];
+
+    foreach ($rules as $bucket => $keywords) {
+        foreach ($keywords as $kw) {
+            if (mb_stripos($name, $kw, 0, 'UTF-8') !== false) {
+                return $bucket;
+            }
+        }
+    }
+    return null;
+}
+
 try {
     // Lấy tháng từ request
     $month = isset($_GET['month']) ? $_GET['month'] : date('m/Y');
@@ -22,8 +56,10 @@ try {
     $startDate = "$year-$monthNum-01";
     $endDate = date("Y-m-t", strtotime($startDate));
     
-    // Danh sách thiết bị chuẩn
-    $standardEquipment = ['Giày', 'Mũ', 'Áo quần', 'Kính', 'Áo mưa', 'Nút tai', 'Phim'];
+    // Danh sách thiết bị chuẩn (mở rộng)
+    $standardEquipment = ['Giày', 'Mũ', 'Áo quần', 'Kính', 'Áo mưa', 'Nút tai', 'Phim', 'Găng tay', 'Khẩu trang', 'Áo phao cứu sinh', 'Găng tay da thợ hàn'];
+
+    $qtyExpr = columnExists($conn, 'bhld_ctctu', 'so_luong_cap') ? 'IFNULL(ctct.so_luong_cap, ctct.sl)' : 'ctct.sl';
     
     // Lấy danh sách phòng ban và nhân viên
     $sql = "SELECT pb.mapb, pb.tenphong as tenphongban, nv.manv, nv.tennhanvien
@@ -63,12 +99,12 @@ try {
     }
     
     // Lấy thiết bị đã cấp trong tháng (theo ngày nhận thực tế)
-    $sql2 = "SELECT nv.mapb, nv.manv, vt.tenvt, ctct.sl
+    $sql2 = "SELECT nv.mapb, nv.manv, vt.tenvt, $qtyExpr as sl_cap
              FROM bhld_ctctu ctct
              INNER JOIN bhld_ctu ct ON ctct.mact = ct.mact
              INNER JOIN bhld_nhanvien nv ON ct.manv = nv.manv
              LEFT JOIN bhld_dmvattu vt ON ctct.mavt = vt.mavt
-             WHERE ctct.ngnhan BETWEEN '$startDate' AND '$endDate' AND ctct.sl > 0";
+             WHERE ctct.ngnhan BETWEEN '$startDate' AND '$endDate' AND $qtyExpr > 0";
     
     $equipmentCount = 0;
     $result2 = mysqli_query($conn, $sql2);
@@ -77,18 +113,16 @@ try {
             $deptCode = $row['mapb'];
             $empCode = $row['manv'];
             $tenvt = $row['tenvt'];
-            $sl = (int)$row['sl'];
+            $sl = (int)$row['sl_cap'];
             
             if (isset($departments[$deptCode])) {
                 // Dùng index thay vì reference
                 for ($i = 0; $i < count($departments[$deptCode]['employees']); $i++) {
                     if ($departments[$deptCode]['employees'][$i]['manv'] == $empCode && $tenvt) {
-                        foreach ($standardEquipment as $equipName) {
-                            if (stripos($tenvt, $equipName) !== false) {
-                                $departments[$deptCode]['employees'][$i]['equipment'][$equipName]['received'] += $sl;
-                                $equipmentCount++;
-                                break;
-                            }
+                        $bucket = detectEquipmentBucket($tenvt);
+                        if ($bucket !== null && isset($departments[$deptCode]['employees'][$i]['equipment'][$bucket])) {
+                            $departments[$deptCode]['employees'][$i]['equipment'][$bucket]['received'] += $sl;
+                            $equipmentCount += $sl;
                         }
                     }
                 }
@@ -120,12 +154,12 @@ try {
     });
     
     // Lấy thống kê tổng hợp vật tư đã nhận trong tháng
-    $sql3 = "SELECT vt.mavt, vt.tenvt, vt.dvt, SUM(ctct.sl) as total_qty
+    $sql3 = "SELECT vt.mavt, vt.tenvt, vt.dvt, SUM($qtyExpr) as total_qty
              FROM bhld_ctctu ctct
              INNER JOIN bhld_ctu ct ON ctct.mact = ct.mact
              LEFT JOIN bhld_dmvattu vt ON ctct.mavt = vt.mavt
              WHERE ctct.ngnhan BETWEEN '$startDate' AND '$endDate' 
-             AND ctct.sl > 0
+             AND $qtyExpr > 0
              GROUP BY vt.mavt, vt.tenvt, vt.dvt
              ORDER BY vt.tenvt";
     

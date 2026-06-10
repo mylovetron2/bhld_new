@@ -46,6 +46,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" data-tab="equipment" href="#">
+        <i class="bi bi-box-seam me-1"></i>Danh Mục VT
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" data-tab="reports">
         <i class="bi bi-bar-chart-line me-1"></i>Báo Cáo
       </a>
@@ -53,6 +58,11 @@
     <li class="nav-item">
       <a class="nav-link" data-tab="changelog" href="#">
         <i class="bi bi-clock-history me-1"></i>Lịch sử
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-tab="backup" href="#">
+        <i class="bi bi-database-down me-1"></i>Backup DB
       </a>
     </li>
   </ul>
@@ -73,6 +83,10 @@
               <select class="form-select form-select-sm" id="ct-emp-select">
                 <option value="">-- Tất cả nhân viên --</option>
               </select>
+            </div>
+            <div style="min-width:140px;flex:2">
+              <label class="form-label small text-muted mb-1">Tên NV</label>
+              <input type="text" class="form-control form-control-sm" id="ct-emp-name-search" placeholder="Tìm tên NV..." />
             </div>
             <div style="min-width:140px;flex:2">
               <label class="form-label small text-muted mb-1">Mã CT</label>
@@ -199,6 +213,7 @@
               <th>Mã PB</th>
               <th>Phòng ban</th>
               <th>Định mức</th>
+              <th>Hồ sơ BHLD</th>
               <th class="text-end">Thao tác</th>
             </tr>
           </thead>
@@ -276,8 +291,86 @@
   </div>
 </div>
 
+<!-- TAB 5: DANH MỤC VẬT TƯ -->
+<div id="tab-equipment" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="input-group input-group-sm" style="max-width:340px">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="eq-search" placeholder="Tìm mã vật tư, tên vật tư...">
+          <button class="btn btn-outline-secondary" id="eq-search-btn">Tìm</button>
+        </div>
+        <button class="btn btn-primary btn-sm" id="eq-add-btn">
+          <i class="bi bi-plus-lg me-1"></i>Thêm vật tư
+        </button>
+        <button class="btn btn-outline-secondary btn-sm ms-md-auto" id="eq-reload-btn">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </div>
+    <div class="col-12">
+      <div id="eq-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+      <div class="table-responsive" id="eq-table-wrap">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th>Mã VT</th>
+              <th>Tên vật tư</th>
+              <th>ĐVT</th>
+              <th>Ghi chú</th>
+              <th class="text-end">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="eq-tbody"></tbody>
+        </table>
+      </div>
+      <div id="eq-empty" class="text-center py-5 d-none">
+        <i class="bi bi-box fs-1 text-muted"></i>
+        <p class="text-muted mt-2">Không có vật tư</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Thêm/Sửa vật tư -->
+<div class="modal fade" id="equipmentModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="equipmentModalTitle">Thêm vật tư</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Mã vật tư <span class="text-danger">*</span></label>
+          <input type="number" class="form-control" id="eq-mavt-input" min="1" placeholder="VD: 101" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Tên vật tư <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="eq-tenvt-input" placeholder="VD: Giày bảo hộ" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Đơn vị tính</label>
+          <input type="text" class="form-control" id="eq-dvt-input" placeholder="VD: đôi, cái" />
+        </div>
+        <div class="mb-1">
+          <label class="form-label">Ghi chú</label>
+          <textarea class="form-control" id="eq-ghichu-input" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-primary" id="eq-save-btn">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TAB 5: BÁO CÁO -->
-<div id="tab-reports" class="tab-panel d-none" style="height:calc(100vh - 96px);overflow:hidden;flex-direction:column">
+<div id="tab-reports" class="tab-panel d-none" style="height:calc(100vh - 96px);display:flex;flex-direction:column">
   <!-- Toolbar -->
   <div class="border-bottom bg-light px-3 py-2 d-flex align-items-center gap-2 flex-wrap flex-shrink-0">
     <!-- Month nav -->
@@ -391,6 +484,63 @@
       </div>
       <div id="cl-empty" class="text-center py-4 text-muted d-none">Không có dữ liệu</div>
       <div id="cl-pagination" class="d-flex justify-content-center gap-1 mt-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 6: BACKUP DATABASE -->
+<div id="tab-backup" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12 col-xl-8">
+      <div class="card shadow-sm">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-database-lock me-2 text-primary"></i>Backup dữ liệu hệ thống</h6>
+          <span class="badge text-bg-secondary" id="bk-last-run">Chưa backup</span>
+        </div>
+        <div class="card-body">
+          <p class="text-muted mb-3">
+            Tải file sao lưu toàn bộ bảng dữ liệu BHLD ở định dạng SQL để lưu trữ hoặc khôi phục khi cần.
+          </p>
+          <ul class="small text-muted mb-3">
+            <li>Cần đăng nhập để thực hiện backup.</li>
+            <li>File tải về chứa lệnh CREATE TABLE, INSERT dữ liệu và TRIGGER.</li>
+            <li>Nên lưu bản backup định kỳ trước khi thao tác dữ liệu lớn.</li>
+          </ul>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary" id="bk-download-btn">
+              <i class="bi bi-download me-1"></i>Tải file Backup .sql
+            </button>
+            <button class="btn btn-outline-secondary" id="bk-refresh-btn">
+              <i class="bi bi-arrow-clockwise me-1"></i>Làm mới thời gian
+            </button>
+          </div>
+          <div class="mt-3 small" id="bk-status"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-8">
+      <div class="card shadow-sm border-warning-subtle">
+        <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-database-exclamation me-2 text-warning-emphasis"></i>Khôi phục từ file SQL</h6>
+          <span class="badge text-bg-warning">Nguy hiểm</span>
+        </div>
+        <div class="card-body">
+          <p class="text-muted mb-2">Khôi phục sẽ ghi đè dữ liệu hiện tại. Hãy backup trước khi thực hiện.</p>
+          <div class="mb-3">
+            <label class="form-label">Chọn file .sql</label>
+            <input type="file" class="form-control" id="bk-restore-file" accept=".sql,text/plain,application/sql" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nhập xác nhận</label>
+            <input type="text" class="form-control" id="bk-restore-confirm" placeholder="Nhập: RESTORE" />
+            <div class="form-text">Chỉ chạy khi bạn nhập chính xác RESTORE.</div>
+          </div>
+          <button class="btn btn-danger" id="bk-restore-btn">
+            <i class="bi bi-upload me-1"></i>Khôi phục Database
+          </button>
+          <div class="mt-2 small text-muted" id="bk-restore-status"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -604,6 +754,65 @@
           </div>
         </div>
 
+        <hr class="my-3" />
+        <div class="mb-2">
+          <span class="fw-semibold text-primary"><i class="bi bi-person-vcard me-1"></i>Hồ sơ bảo hộ cá nhân</span>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Giày size</label>
+            <input type="text" class="form-control" id="emp-giay-size" placeholder="VD: 41, 42" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Giày loại</label>
+            <input type="text" class="form-control" id="emp-giay-loai" placeholder="VD: Da, thể thao" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Quần áo size</label>
+            <input type="text" class="form-control" id="emp-quanao-size" placeholder="VD: M, L, XL" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Mũ màu</label>
+            <input type="text" class="form-control" id="emp-mu-mau" placeholder="VD: Vàng, trắng" />
+          </div>
+          <div class="col-12">
+            <label class="form-label">Ghi chú hồ sơ</label>
+            <textarea class="form-control" id="emp-hoso-ghichu" rows="2" placeholder="Ghi chú size/màu/loại riêng..."></textarea>
+          </div>
+        </div>
+
+        <hr class="my-3" />
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="fw-semibold text-primary"><i class="bi bi-box-seam me-1"></i>Định mức vật tư theo nhân viên</span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary" type="button" id="emp-policy-from-dm-btn">
+              <i class="bi bi-magic me-1"></i>Lấy từ định mức
+            </button>
+            <button class="btn btn-sm btn-outline-primary" type="button" id="emp-policy-add-row-btn">
+              <i class="bi bi-plus-lg me-1"></i>Thêm dòng
+            </button>
+          </div>
+        </div>
+        <div class="table-responsive border rounded">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="min-width:220px">Vật tư</th>
+                <th class="text-center" style="width:90px">ĐMTG</th>
+                <th class="text-center" style="width:90px">Số lượng</th>
+                <th class="text-center" style="width:90px">Active</th>
+                <th>Ghi chú</th>
+                <th class="text-center" style="width:70px">Xóa</th>
+              </tr>
+            </thead>
+            <tbody id="emp-policy-tbody">
+              <tr class="emp-policy-empty-row">
+                <td colspan="6" class="text-center text-muted py-3">Chưa có định mức vật tư riêng cho nhân viên</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <!-- Preview vật tư theo định mức -->
         <!-- Preview vật tư theo định mức -->
         <div id="emp-dm-preview" class="d-none mt-3">
@@ -629,12 +838,47 @@
           <div class="form-check mb-2">
             <input class="form-check-input" type="checkbox" id="emp-create-ct-check" onchange="toggleFirstCtDate(this.checked)" />
             <label class="form-check-label fw-semibold" for="emp-create-ct-check">
-              Tạo chứng từ cấp phát lần đầu
+              Tạo chứng từ cấp phát mới
             </label>
           </div>
           <div id="emp-first-ct-date-row" class="d-none">
             <label class="form-label mb-1">Ngày lập chứng từ</label>
             <input type="date" class="form-control" id="emp-first-ct-date" />
+          </div>
+        </div>
+
+        <!-- Cấp phát nhanh 1 vật tư cho nhân viên cũ -->
+        <div id="emp-quick-ct-section" class="mt-3 border rounded p-3 bg-light d-none">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="emp-quick-ct-check" onchange="toggleQuickCtFields(this.checked)" />
+            <label class="form-check-label fw-semibold" for="emp-quick-ct-check">
+              Cấp phát nhanh 1 vật tư
+            </label>
+          </div>
+          <div id="emp-quick-ct-fields" class="d-none">
+            <div class="row g-2">
+              <div class="col-12">
+                <label class="form-label mb-1">Vật tư</label>
+                <select class="form-select" id="emp-quick-ct-mavt">
+                  <option value="">-- Chọn vật tư --</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label mb-1">Số lượng</label>
+                <input type="number" class="form-control" id="emp-quick-ct-sl" min="1" value="1" />
+              </div>
+              <div class="col-md-4">
+                <label class="form-label mb-1">Định mức TG</label>
+                <input type="number" class="form-control" id="emp-quick-ct-dmtg" min="0" value="12" />
+              </div>
+              <div class="col-md-4">
+                <label class="form-label mb-1">Ngày cấp phát</label>
+                <input type="date" class="form-control" id="emp-quick-ct-date" />
+              </div>
+            </div>
+            <div class="text-muted small mt-2">
+              Dùng khi chỉ muốn cấp phát riêng một món cho nhân viên cũ, ví dụ Áo phao cứu sinh cho 5133.
+            </div>
           </div>
         </div>
       </div>
