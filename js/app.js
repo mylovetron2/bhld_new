@@ -1810,6 +1810,19 @@ async function updateHistorySl(input) {
 let rptInitialized = false;
 let rptSelectedDate = new Date(); // current month
 
+function isReportsTabActive() {
+  const reportPanel = document.getElementById('tab-reports');
+  return !!reportPanel && !reportPanel.classList.contains('d-none');
+}
+
+function invalidateReportCacheAndRefresh() {
+  State.lastReportData = null;
+  State.lastReportMonthStr = null;
+  if (isReportsTabActive()) {
+    loadMonthlyReport();
+  }
+}
+
 function rptMonthStr() {
   return String(rptSelectedDate.getMonth() + 1).padStart(2, '0') + '/' + rptSelectedDate.getFullYear();
 }
@@ -1828,6 +1841,11 @@ function initReportsTab() {
     rptInitialized = true;
     rptSelectedDate = new Date();
     rptUpdateLabel();
+
+    // Auto-refresh report if data changed from other tabs.
+    window.addEventListener('bhld:data-changed', () => {
+      invalidateReportCacheAndRefresh();
+    });
 
     document.getElementById('rpt-prev-btn').addEventListener('click', () => {
       rptSelectedDate.setMonth(rptSelectedDate.getMonth() - 1);
@@ -1851,7 +1869,7 @@ function initReportsTab() {
     });
     document.getElementById('rpt-load-btn').addEventListener('click', loadMonthlyReport);
     document.getElementById('rpt-print-btn').addEventListener('click', () => window.print());
-    document.getElementById('rpt-print-total-btn').addEventListener('click', printMonthlySummary);
+    document.getElementById('rpt-print-total-btn').disabled = true;
     document.getElementById('rpt-export-word-btn').addEventListener('click', exportWordReport);
   }
   loadMonthlyReport();
@@ -1885,6 +1903,7 @@ async function loadMonthlyReport() {
 function renderMonthlyReport(data, monthStr) {
   const container = document.getElementById('rpt-content');
   const deps = data.departments || [];
+  const reportColSpan = 2 + EQUIP_COLS.length;
 
   // --- Stats bar ---
   let totalNV = 0, totalVT = 0;
@@ -1912,7 +1931,7 @@ function renderMonthlyReport(data, monthStr) {
   document.getElementById('rpt-stats-bar').classList.remove('d-none');
 
   if (!deps.length) {
-    container.innerHTML = '<div class="alert alert-info">Không có dữ liệu phòng ban.</div>';
+    container.innerHTML = '<div class="alert alert-info">Chưa có dữ liệu cho tháng này.</div>';
     return;
   }
 
@@ -1948,7 +1967,7 @@ function renderMonthlyReport(data, monthStr) {
               ${EQUIP_COLS.map(c => `<th class="text-center" style="width:64px">${escHtml(c.label)}</th>`).join('')}
             </tr>
           </thead>
-          <tbody>${empRows || '<tr><td colspan="9" class="text-center text-muted fst-italic py-3">Không có dữ liệu</td></tr>'}</tbody>
+          <tbody>${empRows || `<tr><td colspan="${reportColSpan}" class="text-center text-muted fst-italic py-3">Không có dữ liệu</td></tr>`}</tbody>
         </table>
       </div>
     </div>`;
@@ -2149,17 +2168,22 @@ async function printCertificate(mact) {
 // Mapping cột cố định theo mẫu in (khớp với standardEquipment trong monthly_report.php)
 const EQUIP_COLS = [
   { key: 'Giày',    label: 'Giày' },
-  { key: 'Mũ',      label: 'Mũ' },
   { key: 'Áo quần', label: 'Quần áo' },
+  { key: 'Mũ',      label: 'Mũ' },
   { key: 'Kính',    label: 'Kính' },
+  { key: 'Găng tay', label: 'Găng tay' },
+  { key: 'Khẩu trang', label: 'Khẩu trang' },
   { key: 'Áo mưa',  label: 'Áo mưa' },
+  { key: 'Phim',    label: 'Phin lọc' },
+  { key: 'Áo phao cứu sinh', label: 'Áo phao' },
   { key: 'Nút tai', label: 'Nút tai' },
-  { key: 'Phim',    label: 'Phin Lọc' },
+  { key: 'Găng tay da thợ hàn', label: 'GT da hàn' },
 ];
 
 function printMonthlySummary() {
   const data     = State.lastReportData;
   const monthStr = State.lastReportMonthStr;
+  const printColSpan = 3 + EQUIP_COLS.length;
 
   if (!data) {
     showToast('Vui lòng xem báo cáo trước khi in', 'warning');
@@ -2208,7 +2232,7 @@ function printMonthlySummary() {
             </tr>
           </thead>
           <tbody>
-            ${empRows || '<tr><td colspan="10" style="text-align:center;font-style:italic;color:#888">Không có dữ liệu</td></tr>'}
+            ${empRows || `<tr><td colspan="${printColSpan}" style="text-align:center;font-style:italic;color:#888">Không có dữ liệu</td></tr>`}
           </tbody>
         </table>
       </div>`;
@@ -2283,7 +2307,7 @@ function exportWordReport() {
     return;
   }
   const monthStr = `${month}/${year}`;
-  const url = `${API_BASE}/export_word.php?month=${encodeURIComponent(monthStr)}`;
+  const url = `${API_BASE}/export_word.php?month=${encodeURIComponent(monthStr)}&_t=${Date.now()}`;
   window.open(url, '_blank');
 }
 

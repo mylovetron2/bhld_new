@@ -8,6 +8,9 @@ const API_BASE = 'https://diavatly.cloud/projectBHLD/api';
 async function apiFetch(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const method = (options.method || 'GET').toUpperCase();
+  const requestUrl = method === 'GET'
+    ? `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}`
+    : url;
 
   // Chỉ gửi Content-Type khi có body (POST/PUT/DELETE)
   // GET không gửi Content-Type để tránh CORS preflight không cần thiết
@@ -16,7 +19,7 @@ async function apiFetch(endpoint, options = {}) {
     : { 'Content-Type': 'application/json; charset=UTF-8', 'Accept': 'application/json' };
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(requestUrl, {
       ...options,
       headers,
       credentials: 'include',
@@ -27,6 +30,11 @@ async function apiFetch(endpoint, options = {}) {
     if (!response.ok) throw new Error(`Lỗi HTTP: ${response.status}`);
 
     const data = await response.json();
+    if (method !== 'GET' && data && data.success) {
+      window.dispatchEvent(new CustomEvent('bhld:data-changed', {
+        detail: { endpoint, method, at: Date.now() }
+      }));
+    }
     return data;
   } catch (err) {
     if (err instanceof TypeError) {

@@ -195,6 +195,10 @@ body {
   #tab-certificates,
   #tab-management,
   #tab-employees,
+  #tab-allocate,
+  #tab-equipment,
+  #tab-changelog,
+  #tab-backup,
   .rpt-controls,
   .btn {
     display: none !important;
@@ -202,20 +206,41 @@ body {
 
   #tab-reports {
     display: block !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
   }
 
-  #rpt-content .card {
+  #tab-reports .border-bottom.bg-light,
+  #rpt-loading,
+  #rpt-stats-bar {
+    display: none !important;
+  }
+
+  #tab-reports .flex-grow-1,
+  #tab-reports .overflow-auto,
+  #rpt-content,
+  .table-responsive {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  #rpt-content .card,
+  #rpt-content .mb-4 {
     break-inside: avoid;
+    page-break-inside: avoid;
     box-shadow: none !important;
     border: 1px solid #ccc !important;
   }
 
   body {
-    background: white;
+    background: white !important;
     font-size: 11pt;
   }
 
-  .table th, .table td {
+  .table th,
+  .table td {
     padding: 4px 6px;
   }
 }

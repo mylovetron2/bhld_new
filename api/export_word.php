@@ -231,15 +231,32 @@ $phpWord->setDefaultFontSize(12);
 
 $section = $phpWord->addSection([
     'orientation' => 'portrait',
-    'marginTop' => 800,
-    'marginRight' => 600,
-    'marginBottom' => 800,
-    'marginLeft' => 600,
+    'marginTop' => 1440,
+    'marginRight' => 760,
+    'marginBottom' => 1440,
+    'marginLeft' => 1440,
+    'headerHeight' => 400,
 ]);
 
+// Header
+$header = $section->addHeader();
+$header->addText(
+    'XN Địa vật lý GK',
+    ['bold' => true, 'size' => 13],
+    ['alignment' => Jc::LEFT]
+);
+
+// Tiêu đề chính
 $section->addText(
-    'BÁO CÁO CẤP PHÁT BHLĐ - THÁNG ' . $monthNum . '/' . $year,
-    ['bold' => true, 'size' => 12],
+    'CẤP PHÁT BẢO HỘ LAO ĐỘNG',
+    ['size' => 14, 'bold' => true],
+    ['alignment' => Jc::CENTER, 'spaceAfter' => 40]
+);
+
+// Dòng tháng
+$section->addText(
+    'Tháng ' . $monthNum . '-' . $year,
+    ['size' => 12],
     ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
 );
 
@@ -248,12 +265,16 @@ $tableStyle = [
     'borderColor' => '666666',
     'cellMargin' => 40,
     'alignment' => JcTable::CENTER,
+    'width' => 10205,
+    'unit' => \PhpOffice\PhpWord\SimpleType\TblWidth::TWIP,
 ];
 $statsTableStyle = [
     'borderSize' => 4,
     'borderColor' => '999999',
-    'cellMargin' => 30,
-    'alignment' => JcTable::START,
+    'cellMargin' => 40,
+    'alignment' => JcTable::CENTER,
+    'width' => 10205,
+    'unit' => \PhpOffice\PhpWord\SimpleType\TblWidth::TWIP,
 ];
 $headerCellStyle = ['bgColor' => 'EDEDED'];
 $headerFont = ['bold' => true, 'size' => 11];
@@ -447,23 +468,8 @@ if (empty($departments)) {
                 if ($c['key'] === 'stt') {
                     $value = (string)$stt;
                 } elseif ($c['key'] === 'tennhanvien') {
-                    $nameValue = trim((string)($emp['tennhanvien'] ?? ''));
-                    $profileParts = [];
-                    if (!empty($emp['giay_size']) || !empty($emp['giay_loai'])) {
-                        $profileParts[] = 'Giày: ' . trim((string)$emp['giay_size'] . ' ' . (string)$emp['giay_loai']);
-                    }
-                    if (!empty($emp['quanao_size'])) {
-                        $profileParts[] = 'Áo: ' . trim((string)$emp['quanao_size']);
-                    }
-                    if (!empty($emp['mu_mau'])) {
-                        $profileParts[] = 'Mũ: ' . trim((string)$emp['mu_mau']);
-                    }
-
                     $cell = $table->addCell($c['w']);
-                    $cell->addText($nameValue, ['size' => 11], ['alignment' => Jc::LEFT]);
-                    if (!empty($profileParts)) {
-                        $cell->addText(implode(' | ', $profileParts), ['size' => 10, 'italic' => true], ['alignment' => Jc::LEFT]);
-                    }
+                    $cell->addText(trim((string)($emp['tennhanvien'] ?? '')), ['size' => 11], ['alignment' => Jc::LEFT]);
                     continue;
                 } else {
                     $value = $emp[$c['key']] ?? '';
@@ -471,6 +477,30 @@ if (empty($departments)) {
                         $value = $value > 0 ? (string)$value : '';
                     } else {
                         $value = trim((string)$value);
+                    }
+
+                    if ($value !== '') {
+                        if ($c['key'] === 'giaybh') {
+                            $giaySize = trim((string)($emp['giay_size'] ?? ''));
+                            $giayLoai = trim((string)($emp['giay_loai'] ?? ''));
+                            if ($giaySize !== '' && $giayLoai !== '') {
+                                $value .= ' (' . $giaySize . '-' . $giayLoai . ')';
+                            } elseif ($giaySize !== '') {
+                                $value .= ' (' . $giaySize . ')';
+                            } elseif ($giayLoai !== '') {
+                                $value .= ' (' . $giayLoai . ')';
+                            }
+                        } elseif ($c['key'] === 'quanao') {
+                            $qaSize = trim((string)($emp['quanao_size'] ?? ''));
+                            if ($qaSize !== '') {
+                                $value .= ' (' . $qaSize . ')';
+                            }
+                        } elseif ($c['key'] === 'mubh') {
+                            $muMau = trim((string)($emp['mu_mau'] ?? ''));
+                            if ($muMau !== '') {
+                                $value .= ' (' . $muMau . ')';
+                            }
+                        }
                     }
                 }
                 $align = in_array($c['key'], ['stt', 'giaybh', 'quanao', 'mubh', 'kinh', 'gangtay', 'khautrang', 'aomua', 'phinloc', 'aophao', 'nuttai', 'gangtayhan'], true)
@@ -484,6 +514,36 @@ if (empty($departments)) {
 }
 
 $tmpFile = tempnam(sys_get_temp_dir(), 'bhld_word_');
+
+
+// ===== NGÀY IN VÀ KÝ TÊN =====
+$section->addText('', ['size' => 6], ['spaceAfter' => 60]);
+
+$section->addText(
+    'Ngày in: ' . $monthNum . '/' . $year,
+    ['size' => 11, 'italic' => true],
+    ['alignment' => Jc::LEFT, 'spaceAfter' => 80]
+);
+
+$signStyle = [
+    'borderSize' => NULL,
+    'cellMargin'  => 40,
+    'alignment'   => JcTable::CENTER,
+    'width' => 10205,
+    'unit' => \PhpOffice\PhpWord\SimpleType\TblWidth::TWIP,
+];
+$signTable = $section->addTable($signStyle);
+$signTable->addRow();
+$cellW = 1700;
+$signHeaders = ['NGƯỜI GIAO', 'NGƯỜI LẬP PHIẾU', 'TRƯỞNG PHÒNG', 'CHÁNH KẾ TOÁN', 'THỦ TRƯỞNG'];
+foreach ($signHeaders as $sh) {
+    $signTable->addCell($cellW)->addText($sh, ['bold' => true, 'size' => 11], ['alignment' => Jc::CENTER]);
+}
+$signTable->addRow();
+foreach ($signHeaders as $_) {
+    $signTable->addCell($cellW)->addText('', ['size' => 40], ['spaceAfter' => 0]);
+}
+
 $docxFile = $tmpFile . '.docx';
 @rename($tmpFile, $docxFile);
 
