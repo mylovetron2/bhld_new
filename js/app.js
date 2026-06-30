@@ -3551,6 +3551,8 @@ function initUncappedTab() {
     uncInitialized = true;
     document.getElementById('unc-load-btn').addEventListener('click', loadUncapped);
     document.getElementById('unc-export-btn').addEventListener('click', exportUncappedCsv);
+    document.getElementById('unc-pb-filter').addEventListener('change', loadUncapped);
+    document.getElementById('unc-month').addEventListener('change', loadUncapped);
   }
   loadUncapped();
 }
@@ -3572,14 +3574,16 @@ async function loadUncapped() {
     // Cập nhật dropdown phòng ban
     const pbSelect = document.getElementById('unc-pb-filter');
     const curPb = pbSelect.value;
-    pbSelect.innerHTML = '<option value="">-- Tất cả bộ phận --</option>';
-    (data.phong_ban_list || []).forEach(pb => {
-      const opt = document.createElement('option');
-      opt.value = pb.mapb;
-      opt.textContent = `${pb.mapb} - ${pb.tenphong}`;
-      if (pb.mapb === curPb) opt.selected = true;
-      pbSelect.appendChild(opt);
-    });
+    if ((data.phong_ban_list || []).length > 0) {
+      pbSelect.innerHTML = '<option value="">-- Tất cả bộ phận --</option>';
+      data.phong_ban_list.forEach(pb => {
+        const opt = document.createElement('option');
+        opt.value = pb.mapb;
+        opt.textContent = `${pb.mapb} - ${pb.tenphong}`;
+        if (pb.mapb === curPb) opt.selected = true;
+        pbSelect.appendChild(opt);
+      });
+    }
 
     const done = Math.max(0, (data.tong_nv || 0) - (data.tong_no_cert || 0) - (data.tong_no_allocate || 0));
     document.getElementById('unc-stat-tong').textContent    = data.tong_nv || 0;
