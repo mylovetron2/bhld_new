@@ -51,6 +51,21 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" data-tab="inventory" href="#">
+        <i class="bi bi-boxes me-1"></i>Tồn Kho
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-tab="schedule" href="#">
+        <i class="bi bi-calendar3 me-1"></i>Lịch Cấp Phát
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-tab="uncapped" href="#">
+        <i class="bi bi-person-x me-1"></i>Chưa Cấp Phát
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" data-tab="reports">
         <i class="bi bi-bar-chart-line me-1"></i>Báo Cáo
       </a>
@@ -235,7 +250,12 @@
     <div id="alloc-sidebar" class="border-end bg-white d-flex flex-column" style="width:280px;min-width:220px;max-width:320px">
       <!-- Sidebar header -->
       <div class="px-3 py-2 border-bottom bg-warning bg-opacity-10">
-        <div class="fw-bold text-warning-emphasis mb-1"><i class="bi bi-people-fill me-1"></i>Nhân viên</div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <div class="fw-bold text-warning-emphasis"><i class="bi bi-people-fill me-1"></i>Nhân viên</div>
+          <button class="btn btn-outline-primary btn-sm ms-auto" id="alloc-team-load-btn" title="Tải vật tư chờ cấp của đội đang chọn">
+            <i class="bi bi-people-fill me-1"></i>Tải cả đội
+          </button>
+        </div>
         <select class="form-select form-select-sm" id="alloc-pb-filter">
           <option value="">-- Tất cả đội --</option>
         </select>
@@ -276,6 +296,7 @@
                 <th style="width:36px">
                   <input type="checkbox" class="form-check-input" id="alloc-check-all" title="Chọn tất cả" />
                 </th>
+                <th>Nhân viên</th>
                 <th>Mã CT</th>
                 <th>Vật tư</th>
                 <th class="text-center">ĐVT</th>
@@ -488,7 +509,467 @@
   </div>
 </div>
 
-<!-- TAB 6: BACKUP DATABASE -->
+<!-- TAB: CHƯA CẤP PHÁT -->
+<div id="tab-uncapped" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <!-- Toolbar -->
+    <div class="col-12">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="d-flex align-items-center gap-1">
+          <label class="form-label mb-0 small fw-semibold">Tháng</label>
+          <input type="month" class="form-control form-control-sm" id="unc-month" style="width:160px" />
+        </div>
+        <select class="form-select form-select-sm" id="unc-pb-filter" style="max-width:220px">
+          <option value="">-- Tất cả bộ phận --</option>
+        </select>
+        <button class="btn btn-primary btn-sm" id="unc-load-btn">
+          <i class="bi bi-search me-1"></i>Kiểm tra
+        </button>
+        <button class="btn btn-outline-success btn-sm ms-md-auto" id="unc-export-btn">
+          <i class="bi bi-download me-1"></i>Xuất CSV
+        </button>
+      </div>
+    </div>
+    <!-- Thẻ tổng hợp -->
+    <div class="col-12">
+      <div class="row g-2">
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-primary" id="unc-stat-tong">—</div>
+              <div class="small text-muted">Tổng NV</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-danger" id="unc-stat-nocert">—</div>
+              <div class="small text-muted">Chưa có chứng từ</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-warning" id="unc-stat-noalloc">—</div>
+              <div class="small text-muted">Có CT, chưa cấp phát</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-success" id="unc-stat-done">—</div>
+              <div class="small text-muted">Đã cấp phát</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Nội dung -->
+    <div class="col-12">
+      <div id="unc-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">Đang tải...</p>
+      </div>
+      <!-- Bảng NV chưa có chứng từ -->
+      <div id="unc-nocert-wrap">
+        <div class="card shadow-sm mb-3">
+          <div class="card-header bg-danger bg-opacity-10 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 text-danger"><i class="bi bi-x-circle me-2"></i>Chưa có chứng từ trong tháng</h6>
+            <span class="badge bg-danger" id="unc-nocert-badge">0</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Mã NV</th>
+                  <th>Họ tên</th>
+                  <th>Bộ phận</th>
+                </tr>
+              </thead>
+              <tbody id="unc-nocert-tbody"></tbody>
+            </table>
+          </div>
+          <div id="unc-nocert-empty" class="text-center py-3 text-success d-none">
+            <i class="bi bi-check-circle-fill me-1"></i>Tất cả nhân viên đã có chứng từ
+          </div>
+        </div>
+      </div>
+      <!-- Bảng NV có CT nhưng chưa cấp phát -->
+      <div id="unc-noalloc-wrap">
+        <div class="card shadow-sm">
+          <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 text-warning"><i class="bi bi-exclamation-triangle me-2"></i>Có chứng từ nhưng chưa cấp phát vật tư</h6>
+            <span class="badge bg-warning text-dark" id="unc-noalloc-badge">0</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Mã NV</th>
+                  <th>Họ tên</th>
+                  <th>Bộ phận</th>
+                  <th>Mã CT</th>
+                  <th>Ngày CT</th>
+                </tr>
+              </thead>
+              <tbody id="unc-noalloc-tbody"></tbody>
+            </table>
+          </div>
+          <div id="unc-noalloc-empty" class="text-center py-3 text-success d-none">
+            <i class="bi bi-check-circle-fill me-1"></i>Tất cả chứng từ đã được cấp phát
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: LỊCH CẤP PHÁT -->
+<div id="tab-schedule" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <!-- Toolbar -->
+    <div class="col-12">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="d-flex align-items-center gap-1">
+          <label class="form-label mb-0 small fw-semibold">Trong</label>
+          <select class="form-select form-select-sm" id="sch-months" style="width:auto">
+            <option value="1">1 tháng</option>
+            <option value="2">2 tháng</option>
+            <option value="3" selected>3 tháng</option>
+            <option value="6">6 tháng</option>
+            <option value="12">12 tháng</option>
+          </select>
+        </div>
+        <div class="d-flex align-items-center gap-1">
+          <label class="form-label mb-0 small fw-semibold">Nhóm theo</label>
+          <select class="form-select form-select-sm" id="sch-group" style="width:auto">
+            <option value="employee">Nhân viên</option>
+            <option value="department">Bộ phận</option>
+            <option value="month">Tháng</option>
+          </select>
+        </div>
+        <select class="form-select form-select-sm" id="sch-pb-filter" style="max-width:200px">
+          <option value="">-- Tất cả bộ phận --</option>
+        </select>
+        <button class="btn btn-primary btn-sm" id="sch-load-btn">
+          <i class="bi bi-search me-1"></i>Xem báo cáo
+        </button>
+        <button class="btn btn-outline-success btn-sm ms-md-auto" id="sch-export-csv-btn">
+          <i class="bi bi-download me-1"></i>Xuất CSV
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="sch-reload-btn">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </div>
+    <!-- Thẻ tổng hợp -->
+    <div class="col-12">
+      <div class="row g-2">
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-primary" id="sch-stat-nv">—</div>
+              <div class="small text-muted">Nhân viên cần cấp</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-info" id="sch-stat-pb">—</div>
+              <div class="small text-muted">Bộ phận</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-warning" id="sch-stat-loaivt">—</div>
+              <div class="small text-muted">Loại vật tư</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-success" id="sch-stat-tong">—</div>
+              <div class="small text-muted">Tổng suất cấp phát</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Nội dung báo cáo -->
+    <div class="col-12">
+      <div id="sch-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">Đang tải...</p>
+      </div>
+      <div id="sch-empty" class="text-center py-5 d-none">
+        <i class="bi bi-check-circle-fill text-success fs-2"></i>
+        <p class="text-muted mt-2">Không có dữ liệu cần cấp phát trong khoảng thời gian này.</p>
+      </div>
+      <div id="sch-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: TỒN KHO -->
+<div id="tab-inventory" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <!-- Toolbar -->
+    <div class="col-12">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="input-group input-group-sm" style="max-width:340px" id="inv-search-wrap">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="inv-search" placeholder="Tìm mã VT, tên vật tư...">
+          <button class="btn btn-outline-secondary" id="inv-search-btn">Tìm</button>
+        </div>
+        <!-- Sub-tabs -->
+        <ul class="nav nav-pills nav-sm ms-2" id="inv-sub-tabs">
+          <li class="nav-item">
+            <a class="nav-link active py-1 px-3 small" data-inv-tab="list" href="#">
+              <i class="bi bi-table me-1"></i>Danh sách
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link py-1 px-3 small" data-inv-tab="report" href="#">
+              <i class="bi bi-bar-chart-line me-1"></i>Báo cáo
+            </a>
+          </li>
+        </ul>
+        <div class="ms-md-auto d-flex gap-2">
+          <button class="btn btn-success btn-sm" id="inv-receive-btn">
+            <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" id="inv-reload-btn">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Tồn kho cards summary -->
+    <div class="col-12">
+      <div class="row g-2" id="inv-summary">
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-primary" id="inv-stat-total">—</div>
+              <div class="small text-muted">Tổng loại VT</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-success" id="inv-stat-nhap">—</div>
+              <div class="small text-muted">Tổng nhập</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-warning" id="inv-stat-caphat">—</div>
+              <div class="small text-muted">Đã cấp phát</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm text-center py-2">
+            <div class="card-body p-2">
+              <div class="fs-4 fw-bold text-danger" id="inv-stat-ton">—</div>
+              <div class="small text-muted">Tổng tồn</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: DANH SÁCH -->
+    <div class="col-12" id="inv-view-list">
+      <div id="inv-loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">Đang tải...</p>
+      </div>
+      <div class="table-responsive" id="inv-table-wrap">
+        <table class="table table-hover table-sm align-middle mb-0" id="inv-table">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th>Mã VT</th>
+              <th>Tên vật tư</th>
+              <th>Đơn vị</th>
+              <th class="text-center">Tổng nhập</th>
+              <th class="text-center">Đã cấp phát</th>
+              <th class="text-center">Tồn kho</th>
+              <th>Cập nhật lần cuối</th>
+              <th class="text-end">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="inv-tbody"></tbody>
+        </table>
+      </div>
+      <div id="inv-empty" class="text-center py-5 d-none">
+        <i class="bi bi-inbox fs-1 text-muted"></i>
+        <p class="text-muted mt-2">Không có dữ liệu tồn kho</p>
+      </div>
+    </div>
+
+    <!-- VIEW: BÁO CÁO -->
+    <div class="col-12 d-none" id="inv-view-report">
+      <div class="row g-3">
+        <!-- Các thẻ trạng thái -->
+        <div class="col-6 col-md-3">
+          <div class="card border-0 bg-success bg-opacity-10 text-center py-2 h-100">
+            <div class="card-body p-2">
+              <div class="fs-3 fw-bold text-success" id="rpt-inv-ok">—</div>
+              <div class="small fw-semibold text-success">Còn đủ hàng</div>
+              <div class="text-muted" style="font-size:11px">Tồn &gt; 10</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 bg-warning bg-opacity-10 text-center py-2 h-100">
+            <div class="card-body p-2">
+              <div class="fs-3 fw-bold text-warning" id="rpt-inv-low">—</div>
+              <div class="small fw-semibold text-warning">Tồn thấp</div>
+              <div class="text-muted" style="font-size:11px">Tồn 1–10</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 bg-danger bg-opacity-10 text-center py-2 h-100">
+            <div class="card-body p-2">
+              <div class="fs-3 fw-bold text-danger" id="rpt-inv-out">—</div>
+              <div class="small fw-semibold text-danger">Hết hàng</div>
+              <div class="text-muted" style="font-size:11px">Tồn = 0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 bg-secondary bg-opacity-10 text-center py-2 h-100">
+            <div class="card-body p-2">
+              <div class="fs-3 fw-bold text-secondary" id="rpt-inv-nodata">—</div>
+              <div class="small fw-semibold text-secondary">Chưa nhập kho</div>
+              <div class="text-muted" style="font-size:11px">Chưa có số liệu</div>
+            </div>
+          </div>
+        </div>
+        <!-- Biểu đồ tồn kho (progress bars) -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+              <h6 class="mb-0"><i class="bi bi-bar-chart me-2 text-primary"></i>Tỷ lệ sử dụng theo vật tư</h6>
+              <button class="btn btn-outline-success btn-sm" id="inv-export-csv-btn">
+                <i class="bi bi-download me-1"></i>Xuất CSV
+              </button>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:220px">Vật tư</th>
+                      <th class="text-center" style="width:70px">Nhập</th>
+                      <th class="text-center" style="width:70px">Cấp phát</th>
+                      <th class="text-center" style="width:70px">Tồn</th>
+                      <th>Tỷ lệ đã dùng</th>
+                      <th class="text-center" style="width:80px">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rpt-inv-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dự báo cấp phát -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <h6 class="mb-0"><i class="bi bi-calendar-event me-2 text-warning"></i>Dự báo vật tư cần cấp phát</h6>
+              <div class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0 small">Trong</label>
+                <select class="form-select form-select-sm" id="fc-months-select" style="width:auto">
+                  <option value="1">1 tháng tới</option>
+                  <option value="2">2 tháng tới</option>
+                  <option value="3" selected>3 tháng tới</option>
+                  <option value="6">6 tháng tới</option>
+                  <option value="12">12 tháng tới</option>
+                </select>
+                <button class="btn btn-outline-primary btn-sm" id="fc-load-btn">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Tải
+                </button>
+                <button class="btn btn-outline-success btn-sm" id="fc-export-csv-btn">
+                  <i class="bi bi-download me-1"></i>Xuất CSV
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <!-- Thẻ tóm tắt dự báo -->
+              <div class="row g-2 mb-3" id="fc-summary-cards">
+                <div class="col-6 col-md-3">
+                  <div class="border rounded text-center py-2">
+                    <div class="fs-4 fw-bold text-primary" id="fc-stat-loai">—</div>
+                    <div class="small text-muted">Loại VT cần cấp</div>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3">
+                  <div class="border rounded text-center py-2">
+                    <div class="fs-4 fw-bold text-warning" id="fc-stat-soluong">—</div>
+                    <div class="small text-muted">Tổng số lượng cần</div>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3">
+                  <div class="border rounded text-center py-2">
+                    <div class="fs-4 fw-bold text-danger" id="fc-stat-thieu">—</div>
+                    <div class="small text-muted">Tổng số thiếu</div>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3">
+                  <div class="border rounded text-center py-2">
+                    <div class="fs-4 fw-bold text-danger" id="fc-stat-loaithieu">—</div>
+                    <div class="small text-muted">Loại VT thiếu tồn kho</div>
+                  </div>
+                </div>
+              </div>
+              <div id="fc-loading" class="text-center py-3 d-none">
+                <div class="spinner-border spinner-border-sm text-primary"></div>
+                <span class="ms-2 small text-muted">Đang tải...</span>
+              </div>
+              <div class="table-responsive" id="fc-table-wrap">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Vật tư</th>
+                      <th class="text-center" style="width:90px">Cần cấp</th>
+                      <th class="text-center" style="width:90px">Tồn kho</th>
+                      <th class="text-center" style="width:80px">Thiếu</th>
+                      <th style="width:130px">Ngày cần sớm nhất</th>
+                      <th style="width:130px">Ngày cần muộn nhất</th>
+                      <th class="text-center" style="width:90px">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fc-tbody"></tbody>
+                </table>
+              </div>
+              <div id="fc-empty" class="text-center py-4 text-muted d-none">
+                <i class="bi bi-check-circle-fill text-success fs-3"></i>
+                <p class="mt-2">Không có vật tư nào cần cấp phát trong khoảng thời gian này.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: BACKUP DATABASE -->
 <div id="tab-backup" class="tab-panel container-fluid py-3 px-4 d-none">
   <div class="row g-3">
     <div class="col-12 col-xl-8">
@@ -919,6 +1400,95 @@
           </table>
         </div>
         <div id="history-empty" class="text-center py-3 d-none text-muted">Không có lịch sử</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nhập kho -->
+<div class="modal fade" id="inventoryReceiveModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-box-arrow-in-down me-2 text-success"></i>Nhập kho</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Thông tin chung -->
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold">Ngày nhập <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="inv-recv-ngay" />
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label">Nguồn nhập</label>
+            <input type="text" class="form-control" id="inv-recv-nguon" placeholder="Mua sắm Q2/2026..." />
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label">Người nhập</label>
+            <input type="text" class="form-control" id="inv-recv-nguoi" placeholder="Tên người thực hiện" />
+          </div>
+        </div>
+        <!-- Bảng danh sách vật tư nhập -->
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="fw-semibold">Danh sách vật tư — điền số lượng cần nhập <span class="text-muted small">(bỏ trống = không nhập)</span></span>
+        </div>
+        <div class="table-responsive" style="max-height:55vh;overflow-y:auto">
+          <table class="table table-bordered table-sm align-middle mb-1" id="inv-recv-table">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="min-width:220px">Tên vật tư</th>
+                <th style="width:70px" class="text-center">Đơn vị</th>
+                <th style="width:120px" class="text-center">Số lượng nhập</th>
+                <th style="min-width:180px">Ghi chú dòng</th>
+              </tr>
+            </thead>
+            <tbody id="inv-recv-tbody"></tbody>
+          </table>
+        </div>
+        <div id="inv-recv-error" class="text-danger small mt-1 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <span class="me-auto small text-muted" id="inv-recv-count-info"></span>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <button class="btn btn-success" id="inv-recv-save-btn">
+          <i class="bi bi-check-lg me-1"></i>Lưu nhập kho
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Chi tiết tồn kho -->
+<div class="modal fade" id="inventoryDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="inv-detail-title">Chi tiết tồn kho</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-3" id="inv-detail-summary"></div>
+        <h6 class="fw-semibold">Lịch sử nhập kho</h6>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Ngày nhập</th>
+                <th class="text-center">Số lượng</th>
+                <th>Nguồn nhập</th>
+                <th>Người nhập</th>
+                <th>Ghi chú</th>
+                <th class="text-end">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="inv-detail-tbody"></tbody>
+          </table>
+        </div>
+        <div id="inv-detail-empty" class="text-center py-3 text-muted d-none">Chưa có lịch sử nhập kho</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>

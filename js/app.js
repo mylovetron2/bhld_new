@@ -117,6 +117,9 @@ function initTabs() {
         if (tab === 'management') initManagementTab();
         if (tab === 'employees') initEmployeesTab();
         if (tab === 'equipment') initEquipmentTab();
+        if (tab === 'inventory') initInventoryTab();
+        if (tab === 'schedule') initScheduleTab();
+        if (tab === 'uncapped') initUncappedTab();
         if (tab === 'reports') initReportsTab();
         if (tab === 'changelog') initChangelogTab();
         if (tab === 'backup') initBackupTab();
@@ -2556,14 +2559,26 @@ let allocInitialized = false;
 let allocItems = []; // [{mact, mavt, tenvt, dvt, dmtg}]
 let allocSelectedKeys = new Set();
 let allocCurrentManv = null;
+let allocMode = 'employee'; // employee | team
+let allocCurrentPb = '';
 
 async function initAllocateTab() {
   if (!allocInitialized) {
     allocInitialized = true;
     document.getElementById('alloc-date').value = today();
-    document.getElementById('alloc-pb-filter').addEventListener('change', renderAllocEmpList);
+    document.getElementById('alloc-pb-filter').addEventListener('change', () => {
+      renderAllocEmpList();
+      if (allocMode === 'team') {
+        loadAllocateTeam();
+      }
+    });
+    document.getElementById('alloc-team-load-btn').addEventListener('click', loadAllocateTeam);
     document.getElementById('alloc-date').addEventListener('change', () => {
-      if (allocCurrentManv) loadAllocateList(allocCurrentManv);
+      if (allocMode === 'team' && allocCurrentPb) {
+        loadAllocateTeam();
+      } else if (allocCurrentManv) {
+        loadAllocateList(allocCurrentManv);
+      }
     });
     document.getElementById('alloc-bulk-btn').addEventListener('click', doAllocateBulk);
     document.getElementById('alloc-check-all').addEventListener('change', e => {
@@ -2633,6 +2648,8 @@ function renderAllocEmpList() {
 }
 
 async function selectAllocEmp(manv, tennhanvien, el) {
+  allocMode = 'employee';
+  allocCurrentPb = '';
   allocCurrentManv = manv;
   // Highlight selected
   document.querySelectorAll('.alloc-emp-item').forEach(e => {
@@ -2645,7 +2662,40 @@ async function selectAllocEmp(manv, tennhanvien, el) {
   await loadAllocateList(manv);
 }
 
+async function fetchPendingAllocItemsByManv(manv, toDate) {
+  const certsRes = await API.getCertificates({ manv, to_date: toDate || today() });
+  if (!certsRes.success || !Array.isArray(certsRes.data) || certsRes.data.length === 0) return [];
+
+  const emp = (State.employees || []).find(e => String(e.manv) === String(manv));
+  const tennhanvien = emp?.tennhanvien || manv;
+  const detailsArr = await Promise.all(
+    certsRes.data.map(c => API.getCertificateDetails(c.mact).catch(() => ({ success: false })))
+  );
+
+  const items = [];
+  certsRes.data.forEach((cert, i) => {
+    const detailRes = detailsArr[i];
+    if (detailRes.success && Array.isArray(detailRes.data)) {
+      detailRes.data.filter(item => item.sl == 0).forEach(item => {
+        items.push({
+          mact: cert.mact,
+          mavt: item.mavt,
+          tenvt: item.tenvt,
+          dvt: item.dvt,
+          dmtg: item.dmtg,
+          manv,
+          tennhanvien,
+        });
+      });
+    }
+  });
+
+  return items;
+}
+
 async function loadAllocateList(manv) {
+  allocMode = 'employee';
+  allocCurrentPb = '';
   setLoading('alloc-loading', true);
   document.getElementById('alloc-table-wrap').classList.add('d-none');
   document.getElementById('alloc-empty').classList.add('d-none');
@@ -2654,30 +2704,65 @@ async function loadAllocateList(manv) {
   document.getElementById('alloc-check-all').checked = false;
   updateAllocBulkBtn();
   try {
-    const certsRes = await API.getCertificates({ manv, to_date: document.getElementById('alloc-date').value || today() });
-    if (!certsRes.success || !certsRes.data?.length) {
-      document.getElementById('alloc-empty').classList.remove('d-none');
-      return;
-    }
-    const detailsArr = await Promise.all(
-      certsRes.data.map(c => API.getCertificateDetails(c.mact).catch(() => ({ success: false })))
-    );
-    certsRes.data.forEach((cert, i) => {
-      const d = detailsArr[i];
-      if (d.success && d.data) {
-        d.data.filter(item => item.sl == 0).forEach(item => {
-          allocItems.push({ mact: cert.mact, mavt: item.mavt, tenvt: item.tenvt, dvt: item.dvt, dmtg: item.dmtg });
-        });
-      }
-    });
+    allocItems = await fetchPendingAllocItemsByManv(manv, document.getElementById('alloc-date').value || today());
     if (allocItems.length === 0) {
       document.getElementById('alloc-empty').classList.remove('d-none');
       return;
     }
+    document.getElementById('alloc-emp-info').innerHTML =
+      `<i class="bi bi-person-fill text-primary me-1"></i><strong>${escHtml((State.employees || []).find(e => String(e.manv) === String(manv))?.tennhanvien || manv)}</strong> <span class="text-muted small">(${escHtml(manv)})</span>`;
     renderAllocateList();
     document.getElementById('alloc-table-wrap').classList.remove('d-none');
   } catch (err) {
     showToast('Lỗi tải dữ liệu: ' + err.message, 'danger');
+  } finally {
+    setLoading('alloc-loading', false);
+  }
+}
+
+async function loadAllocateTeam() {
+  const pb = document.getElementById('alloc-pb-filter').value;
+  if (!pb) {
+    showToast('Vui lòng chọn đội/phòng ban trước khi tải cả đội', 'warning');
+    return;
+  }
+
+  allocMode = 'team';
+  allocCurrentPb = pb;
+  allocCurrentManv = null;
+
+  setLoading('alloc-loading', true);
+  document.getElementById('alloc-table-wrap').classList.add('d-none');
+  document.getElementById('alloc-empty').classList.add('d-none');
+  allocItems = [];
+  allocSelectedKeys.clear();
+  document.getElementById('alloc-check-all').checked = false;
+  updateAllocBulkBtn();
+
+  try {
+    const employees = (State.employees || []).filter(e => e.tennhanvien && e.mapb === pb);
+    if (!employees.length) {
+      document.getElementById('alloc-empty').classList.remove('d-none');
+      document.getElementById('alloc-emp-info').innerHTML = '<i class="bi bi-people-fill text-primary me-1"></i><strong>Không có nhân viên</strong>';
+      return;
+    }
+
+    const toDate = document.getElementById('alloc-date').value || today();
+    const perEmployeeItems = await Promise.all(employees.map(emp => fetchPendingAllocItemsByManv(emp.manv, toDate)));
+    allocItems = perEmployeeItems.flat();
+
+    document.getElementById('alloc-emp-info').innerHTML =
+      `<i class="bi bi-people-fill text-primary me-1"></i><strong>${escHtml(employees[0]?.tenphongban || pb)}</strong> <span class="text-muted small">(${employees.length} NV)</span>`;
+
+    if (allocItems.length === 0) {
+      document.getElementById('alloc-empty').classList.remove('d-none');
+      return;
+    }
+
+    renderAllocateList();
+    document.getElementById('alloc-table-wrap').classList.remove('d-none');
+  } catch (err) {
+    showToast('Lỗi tải dữ liệu cả đội: ' + err.message, 'danger');
   } finally {
     setLoading('alloc-loading', false);
   }
@@ -2688,6 +2773,10 @@ function renderAllocateList() {
     const key = `${item.mact}-${item.mavt}`;
     return `<tr>
       <td><input type="checkbox" class="form-check-input alloc-row-check" data-key="${escHtml(key)}" onchange="onAllocCheckChange(this)" /></td>
+      <td>
+        <div class="fw-medium">${escHtml(item.tennhanvien || '—')}</div>
+        <div class="text-muted" style="font-size:11px">${escHtml(item.manv || '—')}</div>
+      </td>
       <td><span class="badge bg-secondary">${escHtml(item.mact)}</span></td>
       <td><span class="fw-medium">${escHtml(item.tenvt || 'Mã: ' + item.mavt)}</span></td>
       <td class="text-center text-muted small">${escHtml(item.dvt || '—')}</td>
@@ -2815,3 +2904,749 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTabs();
   initCertificatesTab();
 });
+
+// ====================================================================
+// TAB: TỒN KHO
+// ====================================================================
+let invInitialized = false;
+let invData = [];
+
+function initInventoryTab() {
+  if (!invInitialized) {
+    invInitialized = true;
+    document.getElementById('inv-search-btn').addEventListener('click', loadInventory);
+    document.getElementById('inv-search').addEventListener('keydown', e => { if (e.key === 'Enter') loadInventory(); });
+    document.getElementById('inv-reload-btn').addEventListener('click', loadInventory);
+    document.getElementById('inv-receive-btn').addEventListener('click', openReceiveModal);
+    document.getElementById('inv-recv-save-btn').addEventListener('click', saveReceive);
+    // Sub-tab switching
+    document.querySelectorAll('#inv-sub-tabs .nav-link').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        document.querySelectorAll('#inv-sub-tabs .nav-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+        const view = link.dataset.invTab;
+        document.getElementById('inv-view-list').classList.toggle('d-none', view !== 'list');
+        document.getElementById('inv-view-report').classList.toggle('d-none', view !== 'report');
+        document.getElementById('inv-search-wrap').classList.toggle('d-none', view !== 'list');
+        if (view === 'report') { renderInventoryReport(); loadForecast(); }
+      });
+    });
+    document.getElementById('inv-export-csv-btn').addEventListener('click', exportInventoryCsv);
+    document.getElementById('fc-load-btn').addEventListener('click', loadForecast);
+    document.getElementById('fc-export-csv-btn').addEventListener('click', exportForecastCsv);
+  }
+  loadInventory();
+}
+
+async function loadInventory() {
+  setLoading('inv-loading', true);
+  document.getElementById('inv-tbody').innerHTML = '';
+  document.getElementById('inv-empty').classList.add('d-none');
+  document.getElementById('inv-table-wrap').classList.add('d-none');
+
+  try {
+    const search = document.getElementById('inv-search').value.trim();
+    const params = search ? `?search=${encodeURIComponent(search)}` : '';
+    const res = await apiFetch(`/inventory.php${params}`);
+    invData = res.data || [];
+
+    setLoading('inv-loading', false);
+
+    // Stats
+    let totalNhap = 0, totalCapPhat = 0, totalTon = 0;
+    invData.forEach(r => {
+      totalNhap    += parseInt(r.so_luong_nhap)    || 0;
+      totalCapPhat += parseInt(r.so_luong_cap_phat) || 0;
+      totalTon     += parseInt(r.ton)               || 0;
+    });
+    document.getElementById('inv-stat-total').textContent   = invData.length;
+    document.getElementById('inv-stat-nhap').textContent    = totalNhap.toLocaleString('vi-VN');
+    document.getElementById('inv-stat-caphat').textContent  = totalCapPhat.toLocaleString('vi-VN');
+    document.getElementById('inv-stat-ton').textContent     = totalTon.toLocaleString('vi-VN');
+
+    if (invData.length === 0) {
+      document.getElementById('inv-empty').classList.remove('d-none');
+      return;
+    }
+
+    document.getElementById('inv-table-wrap').classList.remove('d-none');
+    const tbody = document.getElementById('inv-tbody');
+    tbody.innerHTML = invData.map(r => {
+      const ton = parseInt(r.ton) || 0;
+      const tonClass = ton <= 0 ? 'text-danger fw-bold' : ton <= 5 ? 'text-warning fw-bold' : 'text-success fw-bold';
+      return `<tr>
+        <td><span class="badge bg-secondary">${escHtml(r.mavt)}</span></td>
+        <td>${escHtml(r.tenvt)}</td>
+        <td class="text-muted small">${escHtml(r.dvt || '—')}</td>
+        <td class="text-center">${parseInt(r.so_luong_nhap) || 0}</td>
+        <td class="text-center text-warning">${parseInt(r.so_luong_cap_phat) || 0}</td>
+        <td class="text-center ${tonClass}">${ton}</td>
+        <td class="small text-muted">${r.ngay_cap_nhat ? formatDate(r.ngay_cap_nhat.split(' ')[0]) : '—'}</td>
+        <td class="text-end">
+          <button class="btn btn-outline-primary btn-sm" onclick="openInventoryDetail(${r.mavt})">
+            <i class="bi bi-eye"></i>
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+
+  } catch (err) {
+    setLoading('inv-loading', false);
+    showToast('Lỗi tải tồn kho: ' + err.message, 'danger');
+  }
+}
+
+// Cache danh sách vật tư cho modal nhập kho
+let invEquipmentOptions = [];
+
+async function loadEquipmentOptionsCache() {
+  if (invEquipmentOptions.length > 0) return;
+  try {
+    const res = await apiFetch('/equipment.php');
+    invEquipmentOptions = res.data || [];
+  } catch (err) {
+    showToast('Lỗi tải danh sách vật tư: ' + err.message, 'danger');
+  }
+}
+
+function renderAllReceiveRows() {
+  const tbody = document.getElementById('inv-recv-tbody');
+  tbody.innerHTML = invEquipmentOptions.map(e => `
+    <tr data-mavt="${e.mavt}">
+      <td class="align-middle">
+        <span class="fw-medium">${escHtml(e.tenvt)}</span>
+        <span class="text-muted small ms-1">[${escHtml(String(e.mavt))}]</span>
+      </td>
+      <td class="align-middle text-center small text-muted">${escHtml(e.dvt || '')}</td>
+      <td>
+        <input type="number" class="form-control form-control-sm recv-soluong text-center" min="1" placeholder="—" />
+      </td>
+      <td>
+        <input type="text" class="form-control form-control-sm recv-ghichu" placeholder="Ghi chú..." />
+      </td>
+    </tr>`).join('');
+  const el = document.getElementById('inv-recv-count-info');
+  if (el) el.textContent = `${invEquipmentOptions.length} loại vật tư`;
+}
+
+async function openReceiveModal() {
+  await loadEquipmentOptionsCache();
+  document.getElementById('inv-recv-ngay').value  = today();
+  document.getElementById('inv-recv-nguon').value = '';
+  document.getElementById('inv-recv-nguoi').value = '';
+  document.getElementById('inv-recv-error').classList.add('d-none');
+  renderAllReceiveRows();
+  getModal('inventoryReceiveModal').show();
+}
+
+async function saveReceive() {
+  const ngay_nhap  = document.getElementById('inv-recv-ngay').value;
+  const nguon_nhap = document.getElementById('inv-recv-nguon').value.trim();
+  const nguoi_nhap = document.getElementById('inv-recv-nguoi').value.trim();
+  const errEl      = document.getElementById('inv-recv-error');
+
+  if (!ngay_nhap) {
+    errEl.textContent = 'Vui lòng nhập ngày nhập.';
+    errEl.classList.remove('d-none');
+    return;
+  }
+
+  // Thu thập các dòng có điền số lượng (bỏ qua dòng để trống)
+  const rows = [];
+  document.getElementById('inv-recv-tbody').querySelectorAll('tr').forEach(tr => {
+    const mavt     = parseInt(tr.dataset.mavt);
+    const so_luong = parseInt(tr.querySelector('.recv-soluong').value);
+    const ghi_chu  = tr.querySelector('.recv-ghichu').value.trim();
+    tr.querySelector('.recv-soluong').classList.remove('is-invalid');
+    if (so_luong > 0) {
+      rows.push({ mavt, so_luong, ghi_chu });
+    }
+  });
+
+  if (rows.length === 0) {
+    errEl.textContent = 'Vui lòng điền số lượng cho ít nhất 1 vật tư.';
+    errEl.classList.remove('d-none');
+    return;
+  }
+  errEl.classList.add('d-none');
+
+  const btn = document.getElementById('inv-recv-save-btn');
+  const oldHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Đang lưu (0/${rows.length})...`;
+
+  let successCount = 0;
+  let failCount = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Đang lưu (${i + 1}/${rows.length})...`;
+    try {
+      await apiFetch('/inventory.php', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'receive', mavt: r.mavt, so_luong: r.so_luong, ngay_nhap, nguon_nhap, nguoi_nhap, ghi_chu: r.ghi_chu })
+      });
+      successCount++;
+    } catch (err) {
+      failCount++;
+      console.error(`[inventory] Lỗi dòng mavt=${r.mavt}:`, err);
+    }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = oldHtml;
+
+  if (failCount === 0) {
+    getModal('inventoryReceiveModal').hide();
+    showToast(`Nhập kho thành công ${successCount} loại vật tư`, 'success');
+  } else {
+    showToast(`Lưu ${successCount} thành công, ${failCount} thất bại`, 'warning');
+  }
+  loadInventory();
+}
+
+async function openInventoryDetail(mavt) {
+  const modal = getModal('inventoryDetailModal');
+  document.getElementById('inv-detail-title').textContent = 'Chi tiết tồn kho';
+  document.getElementById('inv-detail-summary').innerHTML = '<div class="text-muted small">Đang tải...</div>';
+  document.getElementById('inv-detail-tbody').innerHTML = '';
+  document.getElementById('inv-detail-empty').classList.add('d-none');
+  modal.show();
+
+  try {
+    const res = await apiFetch(`/inventory.php?mavt=${mavt}`);
+    const t = res.data.tonkho;
+    const hist = res.data.history || [];
+
+    document.getElementById('inv-detail-title').textContent = `Chi tiết: ${t.tenvt}`;
+    const ton = parseInt(t.ton) || 0;
+    const tonClass = ton <= 0 ? 'text-danger' : ton <= 5 ? 'text-warning' : 'text-success';
+    document.getElementById('inv-detail-summary').innerHTML = `
+      <div class="col-4">
+        <div class="card border-0 bg-light text-center p-2">
+          <div class="fs-5 fw-bold text-success">${parseInt(t.so_luong_nhap) || 0}</div>
+          <div class="small text-muted">Tổng nhập</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card border-0 bg-light text-center p-2">
+          <div class="fs-5 fw-bold text-warning">${parseInt(t.so_luong_cap_phat) || 0}</div>
+          <div class="small text-muted">Đã cấp phát</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card border-0 bg-light text-center p-2">
+          <div class="fs-5 fw-bold ${tonClass}">${ton}</div>
+          <div class="small text-muted">Còn tồn</div>
+        </div>
+      </div>`;
+
+    if (hist.length === 0) {
+      document.getElementById('inv-detail-empty').classList.remove('d-none');
+    } else {
+      document.getElementById('inv-detail-tbody').innerHTML = hist.map(h => `
+        <tr>
+          <td>${formatDate(h.ngay_nhap)}</td>
+          <td class="text-center fw-bold text-success">+${h.so_luong}</td>
+          <td class="small">${escHtml(h.nguon_nhap || '—')}</td>
+          <td class="small">${escHtml(h.nguoi_nhap || '—')}</td>
+          <td class="small text-muted">${escHtml(h.ghi_chu || '')}</td>
+          <td class="text-end">
+            <button class="btn btn-outline-danger btn-sm btn-sm py-0 px-1" onclick="deleteReceiveRecord(${h.id}, ${mavt})">
+              <i class="bi bi-trash" style="font-size:11px"></i>
+            </button>
+          </td>
+        </tr>`).join('');
+    }
+  } catch (err) {
+    document.getElementById('inv-detail-summary').innerHTML = `<div class="text-danger">Lỗi: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function deleteReceiveRecord(id, mavt) {
+  showConfirm(`Xóa bản ghi nhập kho #${id}? Số lượng tồn sẽ được hoàn lại.`, async () => {
+    try {
+      await apiFetch('/inventory.php', { method: 'DELETE', body: JSON.stringify({ id }) });
+      showToast('Đã xóa bản ghi nhập kho', 'success');
+      getModal('inventoryDetailModal').hide();
+      loadInventory();
+    } catch (err) {
+      showToast('Lỗi xóa: ' + err.message, 'danger');
+    }
+  });
+}
+
+function renderInventoryReport() {
+  if (!invData || invData.length === 0) return;
+
+  let okCount = 0, lowCount = 0, outCount = 0, nodataCount = 0;
+
+  const rows = invData.map(r => {
+    const nhap    = parseInt(r.so_luong_nhap)    || 0;
+    const capPhat = parseInt(r.so_luong_cap_phat) || 0;
+    const ton     = parseInt(r.ton)               || 0;
+
+    let status, statusClass, badgeClass;
+    if (nhap === 0) {
+      status = 'Chưa nhập kho'; statusClass = 'text-secondary'; badgeClass = 'bg-secondary'; nodataCount++;
+    } else if (ton <= 0) {
+      status = 'Hết hàng'; statusClass = 'text-danger'; badgeClass = 'bg-danger'; outCount++;
+    } else if (ton <= 10) {
+      status = 'Tồn thấp'; statusClass = 'text-warning'; badgeClass = 'bg-warning text-dark'; lowCount++;
+    } else {
+      status = 'Còn đủ'; statusClass = 'text-success'; badgeClass = 'bg-success'; okCount++;
+    }
+
+    const pct = nhap > 0 ? Math.min(100, Math.round(capPhat / nhap * 100)) : 0;
+    const barClass = pct >= 90 ? 'bg-danger' : pct >= 60 ? 'bg-warning' : 'bg-success';
+
+    return `<tr>
+      <td>
+        <div class="fw-medium">${escHtml(r.tenvt)}</div>
+        <div class="text-muted" style="font-size:11px">[${escHtml(String(r.mavt))}] ${escHtml(r.dvt || '')}</div>
+      </td>
+      <td class="text-center">${nhap}</td>
+      <td class="text-center text-warning">${capPhat}</td>
+      <td class="text-center fw-bold ${statusClass}">${ton}</td>
+      <td style="min-width:160px">
+        <div class="d-flex align-items-center gap-2">
+          <div class="progress flex-grow-1" style="height:8px">
+            <div class="progress-bar ${barClass}" style="width:${pct}%"></div>
+          </div>
+          <span class="small text-muted" style="min-width:32px">${pct}%</span>
+        </div>
+      </td>
+      <td class="text-center"><span class="badge ${badgeClass}">${status}</span></td>
+    </tr>`;
+  });
+
+  document.getElementById('rpt-inv-ok').textContent      = okCount;
+  document.getElementById('rpt-inv-low').textContent     = lowCount;
+  document.getElementById('rpt-inv-out').textContent     = outCount;
+  document.getElementById('rpt-inv-nodata').textContent  = nodataCount;
+  document.getElementById('rpt-inv-tbody').innerHTML     = rows.join('');
+}
+
+function exportInventoryCsv() {
+  if (!invData || invData.length === 0) {
+    showToast('Không có dữ liệu để xuất', 'warning');
+    return;
+  }
+  const header = ['Mã VT', 'Tên vật tư', 'Đơn vị', 'Tổng nhập', 'Đã cấp phát', 'Tồn kho', 'Trạng thái'];
+  const csvRows = [header.join(',')];
+
+  invData.forEach(r => {
+    const nhap    = parseInt(r.so_luong_nhap)    || 0;
+    const capPhat = parseInt(r.so_luong_cap_phat) || 0;
+    const ton     = parseInt(r.ton)               || 0;
+    let status;
+    if (nhap === 0) status = 'Chưa nhập kho';
+    else if (ton <= 0) status = 'Hết hàng';
+    else if (ton <= 10) status = 'Tồn thấp';
+    else status = 'Còn đủ';
+
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    csvRows.push([r.mavt, esc(r.tenvt), esc(r.dvt || ''), nhap, capPhat, ton, esc(status)].join(','));
+  });
+
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `tonkho_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Xuất CSV thành công', 'success');
+}
+
+// ====================================================================
+// TAB: LỊCH CẤP PHÁT
+// ====================================================================
+let schInitialized = false;
+let schData = null;
+
+function initScheduleTab() {
+  if (!schInitialized) {
+    schInitialized = true;
+    document.getElementById('sch-load-btn').addEventListener('click', loadSchedule);
+    document.getElementById('sch-reload-btn').addEventListener('click', loadSchedule);
+    document.getElementById('sch-export-csv-btn').addEventListener('click', exportScheduleCsv);
+    document.getElementById('sch-group').addEventListener('change', () => {
+      if (schData) renderSchedule(schData);
+    });
+  }
+  loadSchedule();
+}
+
+async function loadSchedule() {
+  const months  = document.getElementById('sch-months').value;
+  const group   = document.getElementById('sch-group').value;
+  const mapb    = document.getElementById('sch-pb-filter').value;
+  const content = document.getElementById('sch-content');
+  const empty   = document.getElementById('sch-empty');
+  const loading = document.getElementById('sch-loading');
+
+  content.innerHTML = '';
+  empty.classList.add('d-none');
+  loading.classList.remove('d-none');
+  ['sch-stat-nv','sch-stat-pb','sch-stat-loaivt','sch-stat-tong'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+
+  try {
+    const params = new URLSearchParams({ months, group });
+    if (mapb) params.set('mapb', mapb);
+    const res = await apiFetch(`/report_schedule.php?${params.toString()}`);
+    schData = res.data || {};
+
+    // Cập nhật dropdown phòng ban
+    const pbSel = document.getElementById('sch-pb-filter');
+    const curPb = pbSel.value;
+    pbSel.innerHTML = '<option value="">-- Tất cả bộ phận --</option>' +
+      (schData.phong_ban_list || []).map(pb =>
+        `<option value="${escHtml(pb.mapb)}" ${pb.mapb === curPb ? 'selected' : ''}>${escHtml(pb.tenphong || pb.mapb)}</option>`
+      ).join('');
+
+    // Stats
+    document.getElementById('sch-stat-nv').textContent      = schData.tong_nhan_vien ?? 0;
+    document.getElementById('sch-stat-pb').textContent      = schData.tong_phong_ban ?? 0;
+    document.getElementById('sch-stat-loaivt').textContent  = schData.tong_loai_vt   ?? 0;
+    document.getElementById('sch-stat-tong').textContent    = schData.tong_suat_cap  ?? 0;
+
+    loading.classList.add('d-none');
+
+    if (!schData.grouped || schData.grouped.length === 0) {
+      empty.classList.remove('d-none');
+      return;
+    }
+
+    renderSchedule(schData);
+  } catch (err) {
+    loading.classList.add('d-none');
+    showToast('Lỗi tải báo cáo: ' + err.message, 'danger');
+  }
+}
+
+function renderSchedule(data) {
+  const group   = document.getElementById('sch-group').value;
+  const content = document.getElementById('sch-content');
+  const grouped = data.grouped || [];
+
+  const urgencyBadge = (days) => {
+    if (days <= 14) return '<span class="badge bg-danger">Gấp</span>';
+    if (days <= 30) return '<span class="badge bg-warning text-dark">Sắp đến</span>';
+    return '<span class="badge bg-success">Còn thời gian</span>';
+  };
+
+  content.innerHTML = grouped.map(g => {
+    const icon = group === 'department' ? 'bi-building' :
+                 group === 'month'      ? 'bi-calendar2' : 'bi-person';
+
+    const subHeader = group === 'employee'
+      ? `<span class="text-muted small ms-2">${escHtml(g.tenphongban || g.mapb || '')}</span>`
+      : '';
+
+    // Nhóm items theo nhân viên nếu đang nhóm theo bộ phận/tháng
+    let tableBody = '';
+    if (group === 'employee') {
+      tableBody = g.items.map(r => `
+        <tr>
+          <td class="small">${escHtml(r.tenvt)}</td>
+          <td class="text-center small text-muted">${escHtml(r.dvt || '')}</td>
+          <td class="text-center small">${formatDate(r.ngnhan)}</td>
+          <td class="text-center small fw-semibold">${formatDate(r.ngnhantt)}</td>
+          <td class="text-center">${urgencyBadge(r.con_lai_ngay)}</td>
+          <td class="text-center text-muted small">${escHtml(r.thang_cap)}</td>
+        </tr>`).join('');
+    } else {
+      // Nhóm theo nhân viên bên trong
+      const byNv = {};
+      g.items.forEach(r => {
+        if (!byNv[r.manv]) byNv[r.manv] = { tennhanvien: r.tennhanvien, manv: r.manv, mapb: r.mapb, tenphongban: r.tenphongban, items: [] };
+        byNv[r.manv].items.push(r);
+      });
+      tableBody = Object.values(byNv).map(nv => `
+        <tr class="table-light">
+          <td colspan="6" class="fw-semibold small py-1 ps-3">
+            <i class="bi bi-person me-1 text-muted"></i>${escHtml(nv.tennhanvien)}
+            <span class="text-muted fw-normal">[${escHtml(nv.manv)}]</span>
+            ${group === 'month' ? `<span class="ms-2 badge bg-secondary bg-opacity-50 text-dark">${escHtml(nv.tenphongban || nv.mapb || '')}</span>` : ''}
+          </td>
+        </tr>
+        ${nv.items.map(r => `
+        <tr>
+          <td class="small ps-4">${escHtml(r.tenvt)}</td>
+          <td class="text-center small text-muted">${escHtml(r.dvt || '')}</td>
+          <td class="text-center small">${formatDate(r.ngnhan)}</td>
+          <td class="text-center small fw-semibold">${formatDate(r.ngnhantt)}</td>
+          <td class="text-center">${urgencyBadge(r.con_lai_ngay)}</td>
+          <td class="text-center text-muted small">${escHtml(r.thang_cap)}</td>
+        </tr>`).join('')}`).join('');
+    }
+
+    return `
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-light py-2 d-flex align-items-center justify-content-between">
+          <div>
+            <i class="bi ${icon} me-2 text-primary"></i>
+            <span class="fw-semibold">${escHtml(g.label)}</span>${subHeader}
+          </div>
+          <span class="badge bg-primary rounded-pill">${g.tong} suất</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light border-top-0">
+              <tr>
+                <th>Vật tư</th>
+                <th class="text-center" style="width:60px">ĐVT</th>
+                <th class="text-center" style="width:110px">Ngày nhận</th>
+                <th class="text-center" style="width:120px">Ngày cấp tiếp</th>
+                <th class="text-center" style="width:100px">Trạng thái</th>
+                <th class="text-center" style="width:80px">Tháng</th>
+              </tr>
+            </thead>
+            <tbody>${tableBody}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function exportScheduleCsv() {
+  if (!schData || !schData.detail || schData.detail.length === 0) {
+    showToast('Không có dữ liệu để xuất', 'warning');
+    return;
+  }
+  const months = document.getElementById('sch-months').value;
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = ['Mã NV','Tên nhân viên','Mã BP','Tên bộ phận','Mã VT','Tên vật tư','ĐVT','Ngày nhận','Ngày cấp tiếp','Còn lại (ngày)','Tháng cấp'];
+  const rows = [header.join(','), ...schData.detail.map(r =>
+    [r.manv, esc(r.tennhanvien), r.mapb, esc(r.tenphongban||''), r.mavt, esc(r.tenvt), esc(r.dvt||''),
+     esc(r.ngnhan), esc(r.ngnhantt), r.con_lai_ngay, esc(r.thang_cap)].join(',')
+  )];
+  const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `lich_cap_phat_${months}thang_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Xuất CSV thành công', 'success');
+}
+
+// ====================================================================
+// DỰ BÁO VẬT TƯ CẦN CẤP PHÁT
+// ====================================================================
+let forecastData = [];
+
+async function loadForecast() {
+  const months = parseInt(document.getElementById('fc-months-select').value) || 3;
+  const tbody  = document.getElementById('fc-tbody');
+  const empty  = document.getElementById('fc-empty');
+  const wrap   = document.getElementById('fc-table-wrap');
+  const loading = document.getElementById('fc-loading');
+
+  tbody.innerHTML = '';
+  empty.classList.add('d-none');
+  wrap.classList.add('d-none');
+  loading.classList.remove('d-none');
+  ['fc-stat-loai','fc-stat-soluong','fc-stat-thieu','fc-stat-loaithieu'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+
+  try {
+    const res = await apiFetch(`/inventory_forecast.php?months=${months}`);
+    forecastData = res.data?.items || [];
+    const d = res.data || {};
+
+    document.getElementById('fc-stat-loai').textContent      = d.tong_loai_vt ?? 0;
+    document.getElementById('fc-stat-soluong').textContent   = d.tong_can_cap  ?? 0;
+    document.getElementById('fc-stat-thieu').textContent     = d.tong_thieu    ?? 0;
+    document.getElementById('fc-stat-loaithieu').textContent = d.loai_thieu    ?? 0;
+
+    loading.classList.add('d-none');
+
+    if (forecastData.length === 0) {
+      empty.classList.remove('d-none');
+      return;
+    }
+
+    wrap.classList.remove('d-none');
+    tbody.innerHTML = forecastData.map(r => {
+      const thieu = parseInt(r.thieu) || 0;
+      const ton   = parseInt(r.ton_hien_tai);
+      const can   = parseInt(r.so_luong_can_cap);
+
+      let badge, badgeClass;
+      if (thieu > 0) {
+        badge = `Thiếu ${thieu}`; badgeClass = 'bg-danger';
+      } else if (ton === 0) {
+        badge = 'Hết tồn'; badgeClass = 'bg-warning text-dark';
+      } else {
+        badge = 'Đủ tồn kho'; badgeClass = 'bg-success';
+      }
+
+      return `<tr class="${thieu > 0 ? 'table-danger' : ''}">
+        <td>
+          <div class="fw-medium">${escHtml(r.tenvt)}</div>
+          <div class="text-muted" style="font-size:11px">[${escHtml(String(r.mavt))}] ${escHtml(r.dvt || '')}</div>
+        </td>
+        <td class="text-center fw-bold text-warning">${can}</td>
+        <td class="text-center ${ton <= 0 ? 'text-danger fw-bold' : 'text-success'}">${ton >= 0 ? ton : '—'}</td>
+        <td class="text-center fw-bold ${thieu > 0 ? 'text-danger' : 'text-muted'}">${thieu > 0 ? thieu : '—'}</td>
+        <td class="small">${formatDate(r.ngay_can_cap_som_nhat)}</td>
+        <td class="small">${formatDate(r.ngay_can_cap_muon_nhat)}</td>
+        <td class="text-center"><span class="badge ${badgeClass}">${badge}</span></td>
+      </tr>`;
+    }).join('');
+
+  } catch (err) {
+    loading.classList.add('d-none');
+    showToast('Lỗi tải dự báo: ' + err.message, 'danger');
+  }
+}
+
+function exportForecastCsv() {
+  if (!forecastData || forecastData.length === 0) {
+    showToast('Không có dữ liệu để xuất', 'warning');
+    return;
+  }
+  const months = document.getElementById('fc-months-select').value;
+  const header = ['Mã VT','Tên vật tư','Đơn vị','Cần cấp','Tồn kho','Thiếu','Ngày cần sớm nhất','Ngày cần muộn nhất'];
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = [header.join(','), ...forecastData.map(r =>
+    [r.mavt, esc(r.tenvt), esc(r.dvt||''), r.so_luong_can_cap, r.ton_hien_tai, r.thieu,
+     esc(r.ngay_can_cap_som_nhat), esc(r.ngay_can_cap_muon_nhat)].join(',')
+  )];
+  const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `dubao_caphat_${months}thang_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Xuất CSV dự báo thành công', 'success');
+}
+
+// ====================================================================
+// TAB: CHƯA CẤP PHÁT
+// ====================================================================
+let uncInitialized = false;
+let uncData = null;
+
+function initUncappedTab() {
+  const monthEl = document.getElementById('unc-month');
+  if (!monthEl.value) {
+    const now = new Date();
+    monthEl.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+  if (!uncInitialized) {
+    uncInitialized = true;
+    document.getElementById('unc-load-btn').addEventListener('click', loadUncapped);
+    document.getElementById('unc-export-btn').addEventListener('click', exportUncappedCsv);
+  }
+  loadUncapped();
+}
+
+async function loadUncapped() {
+  const month   = document.getElementById('unc-month').value;
+  const mapb    = document.getElementById('unc-pb-filter').value;
+  const loading = document.getElementById('unc-loading');
+
+  loading.classList.remove('d-none');
+  ['unc-nocert-tbody', 'unc-noalloc-tbody'].forEach(id => document.getElementById(id).innerHTML = '');
+
+  try {
+    let url = `check_uncapped.php?month=${encodeURIComponent(month)}`;
+    if (mapb) url += `&mapb=${encodeURIComponent(mapb)}`;
+    const data = await apiFetch(url);
+    uncData = data;
+
+    // Cập nhật dropdown phòng ban
+    const pbSelect = document.getElementById('unc-pb-filter');
+    const curPb = pbSelect.value;
+    pbSelect.innerHTML = '<option value="">-- Tất cả bộ phận --</option>';
+    (data.phong_ban_list || []).forEach(pb => {
+      const opt = document.createElement('option');
+      opt.value = pb.mapb;
+      opt.textContent = `${pb.mapb} - ${pb.tenphong}`;
+      if (pb.mapb === curPb) opt.selected = true;
+      pbSelect.appendChild(opt);
+    });
+
+    const done = Math.max(0, (data.tong_nv || 0) - (data.tong_no_cert || 0) - (data.tong_no_allocate || 0));
+    document.getElementById('unc-stat-tong').textContent    = data.tong_nv || 0;
+    document.getElementById('unc-stat-nocert').textContent  = data.tong_no_cert || 0;
+    document.getElementById('unc-stat-noalloc').textContent = data.tong_no_allocate || 0;
+    document.getElementById('unc-stat-done').textContent    = done;
+    document.getElementById('unc-nocert-badge').textContent  = data.tong_no_cert || 0;
+    document.getElementById('unc-noalloc-badge').textContent = data.tong_no_allocate || 0;
+
+    renderUncapped(data);
+  } catch (e) {
+    showToast('Lỗi tải dữ liệu: ' + e.message, 'danger');
+  } finally {
+    loading.classList.add('d-none');
+  }
+}
+
+function renderUncapped(data) {
+  const tbody1 = document.getElementById('unc-nocert-tbody');
+  const empty1 = document.getElementById('unc-nocert-empty');
+  const list1  = data.no_cert || [];
+  if (list1.length === 0) {
+    tbody1.innerHTML = '';
+    empty1.classList.remove('d-none');
+  } else {
+    empty1.classList.add('d-none');
+    tbody1.innerHTML = list1.map(r =>
+      `<tr><td><code>${escapeHtml(r.manv)}</code></td>` +
+      `<td>${escapeHtml(r.tennhanvien || '')}</td>` +
+      `<td>${escapeHtml(r.tenphongban || r.mapb || '')}</td></tr>`
+    ).join('');
+  }
+
+  const tbody2 = document.getElementById('unc-noalloc-tbody');
+  const empty2 = document.getElementById('unc-noalloc-empty');
+  const list2  = data.no_allocate || [];
+  if (list2.length === 0) {
+    tbody2.innerHTML = '';
+    empty2.classList.remove('d-none');
+  } else {
+    empty2.classList.add('d-none');
+    tbody2.innerHTML = list2.map(r =>
+      `<tr><td><code>${escapeHtml(r.manv)}</code></td>` +
+      `<td>${escapeHtml(r.tennhanvien || '')}</td>` +
+      `<td>${escapeHtml(r.tenphongban || r.mapb || '')}</td>` +
+      `<td><code>${escapeHtml(r.mact || '')}</code></td>` +
+      `<td>${escapeHtml(r.ngct || '')}</td></tr>`
+    ).join('');
+  }
+}
+
+function exportUncappedCsv() {
+  if (!uncData) { showToast('Chưa có dữ liệu', 'warning'); return; }
+  const month = document.getElementById('unc-month').value || 'unknown';
+  const BOM   = '\uFEFF';
+  const rows  = [['Nhóm', 'Mã NV', 'Họ tên', 'Bộ phận', 'Mã CT', 'Ngày CT']];
+  (uncData.no_cert || []).forEach(r =>
+    rows.push(['Chưa có chứng từ', r.manv, r.tennhanvien || '', r.tenphongban || r.mapb || '', '', '']));
+  (uncData.no_allocate || []).forEach(r =>
+    rows.push(['Có CT, chưa cấp phát', r.manv, r.tennhanvien || '', r.tenphongban || r.mapb || '', r.mact || '', r.ngct || '']));
+  const csv  = BOM + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `chuacaphat_${month}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Xuất CSV thành công', 'success');
+}
