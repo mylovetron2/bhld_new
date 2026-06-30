@@ -1,9 +1,11 @@
 /**
  * BHLD Web App - API Service
- * Kết nối với backend PHP tại diavatly.com/BHLD/api
+ * Kết nối với backend PHP tại diavatly.com/projectBHLD/api
  */
 
-const API_BASE = 'https://diavatly.cloud/projectBHLD/api';
+// Tự động lấy base URL từ trang đang chạy, không hardcode domain
+const API_BASE = window.location.origin + '/projectBHLD/api';
+const API_KEY = 'BHLD_INTERNAL_2026';
 
 async function apiFetch(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
@@ -15,8 +17,8 @@ async function apiFetch(endpoint, options = {}) {
   // Chỉ gửi Content-Type khi có body (POST/PUT/DELETE)
   // GET không gửi Content-Type để tránh CORS preflight không cần thiết
   const headers = method === 'GET'
-    ? { 'Accept': 'application/json' }
-    : { 'Content-Type': 'application/json; charset=UTF-8', 'Accept': 'application/json' };
+    ? { 'Accept': 'application/json', 'X-BHLD-KEY': API_KEY }
+    : { 'Content-Type': 'application/json; charset=UTF-8', 'Accept': 'application/json', 'X-BHLD-KEY': API_KEY };
 
   try {
     const response = await fetch(requestUrl, {
