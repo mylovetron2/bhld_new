@@ -3564,7 +3564,7 @@ async function loadUncapped() {
   ['unc-nocert-tbody', 'unc-noalloc-tbody'].forEach(id => document.getElementById(id).innerHTML = '');
 
   try {
-    let url = `check_uncapped.php?month=${encodeURIComponent(month)}`;
+    let url = `/check_uncapped.php?month=${encodeURIComponent(month)}`;
     if (mapb) url += `&mapb=${encodeURIComponent(mapb)}`;
     const data = await apiFetch(url);
     uncData = data;
