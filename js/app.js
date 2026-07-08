@@ -3565,6 +3565,16 @@ function exportForecastCsv() {
 let uncInitialized = false;
 let uncData = null;
 
+function resetUncappedView() {
+  uncData = null;
+  document.getElementById('unc-stat-tong').textContent = '—';
+  document.getElementById('unc-stat-noalloc').textContent = '—';
+  document.getElementById('unc-stat-done').textContent = '—';
+  document.getElementById('unc-noalloc-badge').textContent = '0';
+  document.getElementById('unc-noalloc-tbody').innerHTML = '';
+  document.getElementById('unc-noalloc-empty').classList.add('d-none');
+}
+
 function initUncappedTab() {
   const monthEl = document.getElementById('unc-month');
   if (!monthEl.value) {
@@ -3575,10 +3585,10 @@ function initUncappedTab() {
     uncInitialized = true;
     document.getElementById('unc-load-btn').addEventListener('click', loadUncapped);
     document.getElementById('unc-export-btn').addEventListener('click', exportUncappedCsv);
-    document.getElementById('unc-pb-filter').addEventListener('change', loadUncapped);
-    document.getElementById('unc-month').addEventListener('change', loadUncapped);
+    document.getElementById('unc-pb-filter').addEventListener('change', resetUncappedView);
+    document.getElementById('unc-month').addEventListener('change', resetUncappedView);
   }
-  loadUncapped();
+  resetUncappedView();
 }
 
 async function loadUncapped() {
