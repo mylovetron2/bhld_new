@@ -124,6 +124,7 @@ function initTabs() {
         if (tab === 'changelog') initChangelogTab();
         if (tab === 'backup') initBackupTab();
         if (tab === 'allocate') initAllocateTab();
+        if (tab === 'recall') initRecallTab();
       } catch (err) {
         console.error('[ERROR] Tab switching:', err);
         showToast('Lỗi chuyển tab: ' + err.message, 'danger');
@@ -931,7 +932,8 @@ async function initEmployeesTab() {
     document.getElementById('emp-search').addEventListener('keydown', e => {
       if (e.key === 'Enter') applyEmpFilter();
     });
-    document.getElementById('emp-reload-btn').addEventListener('click', () => loadEmployees());
+    document.getElementById('emp-reload-btn').addEventListener('click', () => loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all')?.checked));
+    document.getElementById('emp-show-all').addEventListener('change', () => loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all').checked));
     document.getElementById('emp-add-btn').addEventListener('click', () => openEmpModal(null));
     document.getElementById('emp-save-btn').addEventListener('click', saveEmployee);
     document.getElementById('emp-policy-add-row-btn').addEventListener('click', () => addEmpPolicyRow());
@@ -1200,12 +1202,12 @@ function applyEmpFilter() {
   renderEmployeeTable(list);
 }
 
-async function loadEmployees(search) {
+async function loadEmployees(search, showAll = false) {
   setLoading('emp-loading', true);
   document.getElementById('emp-tbody').innerHTML = '';
   document.getElementById('emp-empty').classList.add('d-none');
   try {
-    const res = await API.getEmployees(search);
+    const res = await API.getEmployees(search, showAll);
     if (res.success && res.data) {
       empAllList = res.data;
       // Populate phòng ban dropdown (chỉ lần đầu)
@@ -1243,10 +1245,15 @@ function renderEmployeeTable(list) {
   if (list.length === 0) { tbody.innerHTML = ''; return; }
   tbody.innerHTML = list.map((emp, idx) => {
     const key = `emp-row-${idx}`;
+    const isRetired = emp.trangthai == 0;
+    const rowClass = isRetired ? ' class="text-muted"' : '';
+    const nameCell = isRetired
+      ? `<span style="text-decoration:line-through">${escHtml(emp.tennhanvien)}</span> <span class="badge bg-secondary ms-1">Đã nghỉ</span>`
+      : escHtml(emp.tennhanvien);
     return `
-    <tr data-emp-idx="${idx}">
+    <tr data-emp-idx="${idx}"${rowClass}>
       <td><span class="badge bg-primary bg-opacity-10 text-primary fw-semibold">${escHtml(emp.manv)}</span></td>
-      <td>${escHtml(emp.tennhanvien)}</td>
+      <td>${nameCell}</td>
       <td>${escHtml(emp.mapb)}</td>
       <td>${escHtml(emp.tenphongban || '—')}</td>
       <td>${emp.dinhmuc ? `<span class="badge bg-secondary">${escHtml(emp.dinhmuc)}</span>` : '—'}</td>
@@ -1258,23 +1265,40 @@ function renderEmployeeTable(list) {
         <button class="btn btn-sm btn-outline-primary me-1" onclick="openEmpModalByIdx(${idx})">
           <i class="bi bi-pencil"></i> Sửa
         </button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')">
-          <i class="bi bi-trash"></i> Xóa
-        </button>
+        ${isRetired
+          ? `<button class="btn btn-sm btn-outline-success" onclick="reactivateEmployee('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')"><i class="bi bi-person-check"></i> Kích hoạt lại</button>`
+          : `<button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')"><i class="bi bi-person-x"></i> Nghỉ việc</button>`
+        }
       </td>
     </tr>`;
   }).join('');
 }
 
 function deleteEmployee(manv, tennhanvien) {
-  showConfirm(`Xác nhận xóa nhân viên "${tennhanvien}" (${manv})?<br><small class="text-danger">Lưu ý: Không thể xóa nếu còn chứng từ liên quan.</small>`, async () => {
+  showConfirm(`Đánh dấu nhân viên "${tennhanvien}" (${manv}) là <b>đã nghỉ việc</b>?<br><small class="text-muted">Dữ liệu chứng từ sẽ được giữ lại. Bạn có thể kích hoạt lại sau.</small>`, async () => {
     try {
       const res = await API.deleteEmployee(manv);
       if (res.success) {
-        showToast('Đã xóa nhân viên thành công', 'success');
-        loadEmployees();
+        showToast('Đã đánh dấu nhân viên nghỉ việc', 'success');
+        loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all')?.checked);
       } else {
-        showToast(res.message || 'Xóa thất bại', 'danger');
+        showToast(res.message || 'Thao tác thất bại', 'danger');
+      }
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'danger');
+    }
+  });
+}
+
+function reactivateEmployee(manv, tennhanvien) {
+  showConfirm(`Kích hoạt lại nhân viên "${tennhanvien}" (${manv})?`, async () => {
+    try {
+      const res = await API.updateEmployee({ manv, trangthai: 1 });
+      if (res.success) {
+        showToast('Đã kích hoạt lại nhân viên', 'success');
+        loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all')?.checked);
+      } else {
+        showToast(res.message || 'Thao tác thất bại', 'danger');
       }
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'danger');
@@ -1871,8 +1895,7 @@ function initReportsTab() {
       loadMonthlyReport();
     });
     document.getElementById('rpt-load-btn').addEventListener('click', loadMonthlyReport);
-    document.getElementById('rpt-print-btn').addEventListener('click', () => window.print());
-    document.getElementById('rpt-print-total-btn').disabled = true;
+    document.getElementById('rpt-print-btn').addEventListener('click', printMonthlySummary);
     document.getElementById('rpt-export-word-btn').addEventListener('click', exportWordReport);
   }
   loadMonthlyReport();
@@ -2572,6 +2595,7 @@ async function initAllocateTab() {
         loadAllocateTeam();
       }
     });
+    document.getElementById('alloc-emp-search').addEventListener('input', () => renderAllocEmpList());
     document.getElementById('alloc-team-load-btn').addEventListener('click', loadAllocateTeam);
     document.getElementById('alloc-date').addEventListener('change', () => {
       if (allocMode === 'team' && allocCurrentPb) {
@@ -2612,7 +2636,12 @@ async function loadAllocSidebar() {
 
 function renderAllocEmpList() {
   const pb = document.getElementById('alloc-pb-filter').value;
-  const filtered = (State.employees || []).filter(e => e.tennhanvien && (!pb || e.mapb === pb));
+  const q = (document.getElementById('alloc-emp-search')?.value || '').trim().toLowerCase();
+  const filtered = (State.employees || []).filter(e =>
+    e.tennhanvien &&
+    (!pb || e.mapb === pb) &&
+    (!q || e.tennhanvien.toLowerCase().includes(q) || e.manv.toLowerCase().includes(q))
+  );
 
   // Group by phong ban
   const groups = {};
@@ -2663,34 +2692,22 @@ async function selectAllocEmp(manv, tennhanvien, el) {
 }
 
 async function fetchPendingAllocItemsByManv(manv, toDate) {
-  const certsRes = await API.getCertificates({ manv, to_date: toDate || today() });
-  if (!certsRes.success || !Array.isArray(certsRes.data) || certsRes.data.length === 0) return [];
+  // 1 request duy nhất thay vì N+1 (certificates + N * certificate_details)
+  const res = await API.getAllocPending(manv, toDate || today());
+  if (!res.success || !Array.isArray(res.data)) return [];
 
   const emp = (State.employees || []).find(e => String(e.manv) === String(manv));
-  const tennhanvien = emp?.tennhanvien || manv;
-  const detailsArr = await Promise.all(
-    certsRes.data.map(c => API.getCertificateDetails(c.mact).catch(() => ({ success: false })))
-  );
+  const tennhanvien = emp?.tennhanvien || res.data[0]?.tennhanvien || manv;
 
-  const items = [];
-  certsRes.data.forEach((cert, i) => {
-    const detailRes = detailsArr[i];
-    if (detailRes.success && Array.isArray(detailRes.data)) {
-      detailRes.data.filter(item => item.sl == 0).forEach(item => {
-        items.push({
-          mact: cert.mact,
-          mavt: item.mavt,
-          tenvt: item.tenvt,
-          dvt: item.dvt,
-          dmtg: item.dmtg,
-          manv,
-          tennhanvien,
-        });
-      });
-    }
-  });
-
-  return items;
+  return res.data.map(item => ({
+    mact: item.mact,
+    mavt: item.mavt,
+    tenvt: item.tenvt,
+    dvt: item.dvt,
+    dmtg: item.dmtg,
+    manv: item.manv || manv,
+    tennhanvien: item.tennhanvien || tennhanvien,
+  }));
 }
 
 async function loadAllocateList(manv) {
@@ -2797,8 +2814,10 @@ function onAllocCheckChange(cb) {
 
 function updateAllocBulkBtn() {
   const n = allocSelectedKeys.size;
-  document.getElementById('alloc-selected-count').textContent = n;
-  document.getElementById('alloc-bulk-btn').disabled = n === 0;
+  const countEl = document.getElementById('alloc-selected-count');
+  if (countEl) countEl.textContent = n;
+  const btn = document.getElementById('alloc-bulk-btn');
+  if (btn) btn.disabled = n === 0;
 }
 
 async function doAllocateSingle(idx, btn) {
@@ -2835,34 +2854,39 @@ async function doAllocateSingle(idx, btn) {
 async function doAllocateBulk() {
   if (allocSelectedKeys.size === 0) return;
   const bulkBtn = document.getElementById('alloc-bulk-btn');
-  const origHtml = bulkBtn.innerHTML;
   bulkBtn.disabled = true;
   bulkBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
   const ngnhan = document.getElementById('alloc-date').value || today();
   const tasks = allocItems
     .map((item, idx) => ({ item, idx, key: `${item.mact}-${item.mavt}` }))
     .filter(t => allocSelectedKeys.has(t.key));
-  const results = await Promise.allSettled(
-    tasks.map(t => API.allocate(t.item.mact, t.item.mavt, ngnhan))
-  );
   let success = 0, failed = 0;
-  const doneKeys = new Set();
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled' && r.value?.success) { success++; doneKeys.add(tasks[i].key); }
-    else failed++;
-  });
-  allocItems = allocItems.filter(item => !doneKeys.has(`${item.mact}-${item.mavt}`));
-  allocSelectedKeys.clear();
-  if (success) showToast(`Đã cấp phát ${success} vật tư${failed ? ', ' + failed + ' lỗi' : ''}`, failed ? 'warning' : 'success');
-  if (allocItems.length === 0) {
-    document.getElementById('alloc-table-wrap').classList.add('d-none');
-    document.getElementById('alloc-empty').classList.remove('d-none');
-  } else {
-    renderAllocateList();
+  try {
+    const results = await Promise.allSettled(
+      tasks.map(t => API.allocate(t.item.mact, t.item.mavt, ngnhan))
+    );
+    const doneKeys = new Set();
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled' && r.value?.success) { success++; doneKeys.add(tasks[i].key); }
+      else failed++;
+    });
+    allocItems = allocItems.filter(item => !doneKeys.has(`${item.mact}-${item.mavt}`));
+    allocSelectedKeys.clear();
+    if (success) showToast(`Đã cấp phát ${success} vật tư${failed ? ', ' + failed + ' lỗi' : ''}`, failed ? 'warning' : 'success');
+    else if (failed) showToast(`Cấp phát thất bại (${failed} lỗi)`, 'danger');
+    if (allocItems.length === 0) {
+      document.getElementById('alloc-table-wrap').classList.add('d-none');
+      document.getElementById('alloc-empty').classList.remove('d-none');
+    } else {
+      renderAllocateList();
+    }
+  } catch (err) {
+    showToast('Lỗi: ' + err.message, 'danger');
+  } finally {
+    const n = allocSelectedKeys.size;
+    bulkBtn.innerHTML = `<i class="bi bi-check2-all me-1"></i>Cấp phát đã chọn (<span id="alloc-selected-count">${n}</span>)`;
+    bulkBtn.disabled = n === 0;
   }
-  updateAllocBulkBtn();
-  bulkBtn.disabled = false;
-  bulkBtn.innerHTML = origHtml;
 }
 
 // ====================================================================
@@ -3568,7 +3592,8 @@ async function loadUncapped() {
   try {
     let url = `/check_uncapped.php?month=${encodeURIComponent(month)}`;
     if (mapb) url += `&mapb=${encodeURIComponent(mapb)}`;
-    const data = await apiFetch(url);
+    const resp = await apiFetch(url);
+    const data = resp.data;   // apiFetch trả về {success, message, data: {...}}
     uncData = data;
 
     // Cập nhật dropdown phòng ban
@@ -3585,13 +3610,19 @@ async function loadUncapped() {
       });
     }
 
-    const done = Math.max(0, (data.tong_nv || 0) - (data.tong_no_cert || 0) - (data.tong_no_allocate || 0));
+    // Đếm theo NV duy nhất để tránh overcount khi 1 NV có nhiều chứng từ trong tháng.
+    const noCertSet  = new Set((data.no_cert || []).map(r => String(r.manv || '')));
+    const noAllocSet = new Set((data.no_allocate || []).map(r => String(r.manv || '')));
+    const pendingSet = new Set([...noCertSet, ...noAllocSet]);
+    const noCert     = noCertSet.size;
+    const noAlloc    = noAllocSet.size;
+    const done       = Math.max(0, (data.tong_nv || 0) - pendingSet.size);
     document.getElementById('unc-stat-tong').textContent    = data.tong_nv || 0;
-    document.getElementById('unc-stat-nocert').textContent  = data.tong_no_cert || 0;
-    document.getElementById('unc-stat-noalloc').textContent = data.tong_no_allocate || 0;
+    document.getElementById('unc-stat-nocert').textContent  = noCert;
+    document.getElementById('unc-stat-noalloc').textContent = noAlloc;
     document.getElementById('unc-stat-done').textContent    = done;
-    document.getElementById('unc-nocert-badge').textContent  = data.tong_no_cert || 0;
-    document.getElementById('unc-noalloc-badge').textContent = data.tong_no_allocate || 0;
+    document.getElementById('unc-nocert-badge').textContent  = noCert;
+    document.getElementById('unc-noalloc-badge').textContent = noAlloc;
 
     renderUncapped(data);
   } catch (e) {
@@ -3611,9 +3642,9 @@ function renderUncapped(data) {
   } else {
     empty1.classList.add('d-none');
     tbody1.innerHTML = list1.map(r =>
-      `<tr><td><code>${escapeHtml(r.manv)}</code></td>` +
-      `<td>${escapeHtml(r.tennhanvien || '')}</td>` +
-      `<td>${escapeHtml(r.tenphongban || r.mapb || '')}</td></tr>`
+      `<tr><td><code>${escHtml(r.manv)}</code></td>` +
+      `<td>${escHtml(r.tennhanvien || '')}</td>` +
+      `<td>${escHtml(r.tenphongban || r.mapb || '')}</td></tr>`
     ).join('');
   }
 
@@ -3626,11 +3657,11 @@ function renderUncapped(data) {
   } else {
     empty2.classList.add('d-none');
     tbody2.innerHTML = list2.map(r =>
-      `<tr><td><code>${escapeHtml(r.manv)}</code></td>` +
-      `<td>${escapeHtml(r.tennhanvien || '')}</td>` +
-      `<td>${escapeHtml(r.tenphongban || r.mapb || '')}</td>` +
-      `<td><code>${escapeHtml(r.mact || '')}</code></td>` +
-      `<td>${escapeHtml(r.ngct || '')}</td></tr>`
+      `<tr><td><code>${escHtml(r.manv)}</code></td>` +
+      `<td>${escHtml(r.tennhanvien || '')}</td>` +
+      `<td>${escHtml(r.tenphongban || r.mapb || '')}</td>` +
+      `<td><code>${escHtml(r.mact || '')}</code></td>` +
+      `<td>${escHtml(r.ngct || '')}</td></tr>`
     ).join('');
   }
 }
@@ -3653,4 +3684,184 @@ function exportUncappedCsv() {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
   showToast('Xuất CSV thành công', 'success');
+}
+
+// ====================================================================
+// TAB: THU HỒI
+// ====================================================================
+let recallInitialized = false;
+let recallCurrentManv = null;
+let recallCurrentName = '';
+
+async function initRecallTab() {
+  if (!recallInitialized) {
+    recallInitialized = true;
+    const now = new Date();
+    document.getElementById('recall-month').value =
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('recall-date').value = today();
+    document.getElementById('recall-month').addEventListener('change', () => {
+      if (recallCurrentManv) loadRecallItems();
+    });
+    document.getElementById('recall-pb-filter').addEventListener('change', renderRecallEmpList);
+    document.getElementById('recall-emp-search').addEventListener('input', renderRecallEmpList);
+  }
+
+  if (!State.employees || !State.employees.length) {
+    const res = await API.getEmployees();
+    if (res.success) State.employees = res.data;
+  }
+
+  const pbSel = document.getElementById('recall-pb-filter');
+  const pbMap = {};
+  (State.employees || []).forEach(e => { if (e.mapb) pbMap[e.mapb] = e.tenphongban || e.mapb; });
+  const pbEntries = Object.entries(pbMap).sort((a, b) => a[1].localeCompare(b[1]));
+  pbSel.innerHTML = '<option value="">-- Tất cả đội --</option>';
+  pbEntries.forEach(([mapb, ten]) =>
+    pbSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(mapb)}">${escHtml(ten)}</option>`));
+  renderRecallEmpList();
+}
+
+function renderRecallEmpList() {
+  const pb = document.getElementById('recall-pb-filter').value;
+  const q  = (document.getElementById('recall-emp-search')?.value || '').trim().toLowerCase();
+  const filtered = (State.employees || []).filter(e =>
+    e.tennhanvien &&
+    (!pb || e.mapb === pb) &&
+    (!q || e.tennhanvien.toLowerCase().includes(q) || e.manv.toLowerCase().includes(q))
+  );
+  const groups = {};
+  filtered.forEach(emp => {
+    const dept = emp.tenphongban || emp.mapb || 'Chưa phân loại';
+    if (!groups[dept]) groups[dept] = [];
+    groups[dept].push(emp);
+  });
+  const container = document.getElementById('recall-emp-list');
+  if (!filtered.length) {
+    container.innerHTML = '<div class="text-center text-muted py-4 small">Không có nhân viên</div>';
+    return;
+  }
+  container.innerHTML = Object.entries(groups).map(([dept, emps]) => `
+    <div>
+      <div class="px-3 py-1 small fw-semibold text-muted bg-light border-bottom sticky-top" style="font-size:11px;letter-spacing:.5px">
+        <i class="bi bi-building me-1"></i>${escHtml(dept)} (${emps.length})
+      </div>
+      ${emps.map(emp => `
+        <div class="px-3 py-2 border-bottom cursor-pointer d-flex align-items-center gap-2
+          ${emp.manv === recallCurrentManv ? 'bg-danger bg-opacity-10 border-start border-danger border-3' : ''}"
+          onclick="selectRecallEmp('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}',this)">
+          <div class="rounded-circle bg-danger bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0" style="width:32px;height:32px">
+            <i class="bi bi-person text-danger" style="font-size:14px"></i>
+          </div>
+          <div class="overflow-hidden">
+            <div class="fw-medium text-truncate small">${escHtml(emp.tennhanvien)}</div>
+            <div class="text-muted" style="font-size:11px">${escHtml(emp.manv)}</div>
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+async function selectRecallEmp(manv, tennhanvien, el) {
+  recallCurrentManv = manv;
+  recallCurrentName = tennhanvien;
+  document.querySelectorAll('#recall-emp-list .cursor-pointer').forEach(e => {
+    e.classList.remove('bg-danger', 'bg-opacity-10', 'border-start', 'border-danger', 'border-3');
+  });
+  el.classList.add('bg-danger', 'bg-opacity-10', 'border-start', 'border-danger', 'border-3');
+  document.getElementById('recall-emp-info').innerHTML =
+    `<strong>${escHtml(tennhanvien)}</strong> <span class="text-muted">(${escHtml(manv)})</span>`;
+  await loadRecallItems();
+}
+
+async function loadRecallItems() {
+  if (!recallCurrentManv) return;
+  const month = document.getElementById('recall-month').value;
+  document.getElementById('recall-loading').classList.remove('d-none');
+  document.getElementById('recall-table-wrap').classList.add('d-none');
+  document.getElementById('recall-empty').classList.add('d-none');
+  try {
+    const res = await API.getRecallItems(recallCurrentManv, month);
+    document.getElementById('recall-loading').classList.add('d-none');
+    if (res.success) {
+      renderRecallTable(res.data || []);
+      document.getElementById('recall-table-wrap').classList.remove('d-none');
+      if (!res.data || !res.data.length) {
+        document.getElementById('recall-empty').classList.remove('d-none');
+      }
+      loadRecallHistory();
+    }
+  } catch (err) {
+    document.getElementById('recall-loading').classList.add('d-none');
+    showToast('Lỗi tải dữ liệu: ' + err.message, 'danger');
+  }
+}
+
+function renderRecallTable(items) {
+  const tbody = document.getElementById('recall-tbody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted fst-italic py-3">Không có vật tư nào đã cấp phát trong tháng này</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map((item, idx) => `
+    <tr>
+      <td><span class="badge bg-primary bg-opacity-10 text-primary small">${escHtml(item.mact)}</span></td>
+      <td>${escHtml(item.tenvt || 'Mã: ' + item.mavt)}</td>
+      <td class="text-center">${escHtml(item.dvt || '')}</td>
+      <td class="text-center">${item.dmtg}</td>
+      <td>${formatDate(item.ngnhan)}</td>
+      <td><input type="text" class="form-control form-control-sm" id="recall-lydo-${idx}" placeholder="Nhân viên nghỉ việc..."></td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-danger" id="recall-btn-${idx}" onclick="doRecallItem('${escHtml(item.mact)}',${item.mavt},${idx})">
+          <i class="bi bi-arrow-return-left me-1"></i>Thu hồi
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+async function doRecallItem(mact, mavt, idx) {
+  const lyDo = document.getElementById(`recall-lydo-${idx}`)?.value.trim() || '';
+  const ngay = document.getElementById('recall-date').value || today();
+  const btn = document.getElementById(`recall-btn-${idx}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang xử lý...';
+  }
+  try {
+    const res = await API.doRecall(mact, mavt, ngay, lyDo);
+    if (res.success) {
+      showToast('Đã thu hồi thành công', 'success');
+      loadRecallItems();
+    } else {
+      showToast(res.message || 'Thao tác thất bại', 'danger');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-return-left me-1"></i>Thu hồi'; }
+    }
+  } catch (err) {
+    showToast('Lỗi: ' + err.message, 'danger');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-return-left me-1"></i>Thu hồi'; }
+  }
+}
+
+async function loadRecallHistory() {
+  if (!recallCurrentManv) return;
+  const loadingEl = document.getElementById('recall-history-loading');
+  if (loadingEl) loadingEl.classList.remove('d-none');
+  try {
+    const res = await API.getRecallHistory(recallCurrentManv, 50);
+    if (loadingEl) loadingEl.classList.add('d-none');
+    const tbody = document.getElementById('recall-history-tbody');
+    if (!res.success || !res.data || !res.data.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted fst-italic py-3">Chưa có lịch sử thu hồi</td></tr>';
+      return;
+    }
+    tbody.innerHTML = res.data.map(r => `
+      <tr>
+        <td><span class="badge bg-primary bg-opacity-10 text-primary small">${escHtml(r.mact)}</span></td>
+        <td>${escHtml(r.tenvt || 'Mã: ' + r.mavt)}</td>
+        <td class="text-center">${formatDate(r.ngay_cap_phat)}</td>
+        <td class="text-center">${formatDate(r.ngay_thuhoi)}</td>
+        <td class="text-muted small">${escHtml(r.ly_do || '—')}</td>
+      </tr>`).join('');
+  } catch {
+    if (loadingEl) loadingEl.classList.add('d-none');
+  }
 }

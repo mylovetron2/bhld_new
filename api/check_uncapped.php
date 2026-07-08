@@ -19,11 +19,12 @@ if (!preg_match('/^\d{4}-\d{2}$/', $monthParam)) $monthParam = date('Y-m');
 $fromDate = $monthParam . '-01';
 $toDate   = date('Y-m-t', strtotime($fromDate));
 
-$mapb     = isset($_GET['mapb']) ? mysqli_real_escape_string($conn, trim($_GET['mapb'])) : '';
-$pbFilter = $mapb !== '' ? "AND nv.mapb = '$mapb'" : '';
+$mapb     = isset($_GET['mapb']) ? trim($_GET['mapb']) : '';
+$pbFilter = $mapb !== '' ? "AND nv.mapb = ?" : '';
 
 // ---------------------------------------------------------------
 // Nhóm 1: NV chưa có chứng từ nào trong tháng
+// Dùng LEFT JOIN + IS NULL thay vì NOT EXISTS cho hiệu năng tốt hơn.
 // ---------------------------------------------------------------
 $sqlNoCert = "SELECT
         nv.manv,
@@ -35,17 +36,16 @@ $sqlNoCert = "SELECT
         NULL        AS ngct
     FROM bhld_nhanvien nv
     LEFT JOIN bhld_phongban pb ON pb.mapb = nv.mapb
-    WHERE NOT EXISTS (
-        SELECT 1 FROM bhld_ctu ct
-        WHERE ct.manv = nv.manv
-          AND ct.ngct >= '$fromDate'
-          AND ct.ngct <= '$toDate'
-    )
+    LEFT JOIN bhld_ctu ct_chk ON ct_chk.manv = nv.manv
+        AND ct_chk.ngct >= '$fromDate'
+        AND ct_chk.ngct <= '$toDate'
+    WHERE ct_chk.mact IS NULL
     $pbFilter
     ORDER BY nv.mapb, nv.tennhanvien";
 
 // ---------------------------------------------------------------
-// Nhóm 2: NV có chứng từ trong tháng nhưng CHƯA cấp phát vật tư nào (sl = 0 toàn bộ)
+// Nhóm 2: NV có chứng từ trong tháng nhưng CHƯA cấp phát vật tư nào (sl > 0)
+// Dùng LEFT JOIN + IS NULL thay vì NOT EXISTS cho hiệu năng tốt hơn.
 // ---------------------------------------------------------------
 $sqlNoAllocate = "SELECT
         nv.manv,
@@ -60,21 +60,31 @@ $sqlNoAllocate = "SELECT
     JOIN bhld_ctu ct ON ct.manv = nv.manv
               AND ct.ngct >= '$fromDate'
               AND ct.ngct <= '$toDate'
-    WHERE NOT EXISTS (
-        SELECT 1 FROM bhld_ctctu ctu
-        WHERE ctu.mact = ct.mact AND ctu.sl = 1
-    )
+    LEFT JOIN bhld_ctctu ctu_chk ON ctu_chk.mact = ct.mact AND ctu_chk.sl > 0
+    WHERE ctu_chk.mact IS NULL
     $pbFilter
     ORDER BY nv.mapb, nv.tennhanvien";
 
 $noCertList     = [];
 $noAllocateList = [];
 
-$r1 = mysqli_query($conn, $sqlNoCert);
+// Hàm thực thi query có hoặc không bind param mapb
+function execQuery($conn, $sql, $mapb) {
+    if ($mapb !== '') {
+        $stmt = mysqli_prepare($conn, $sql);
+        if (!$stmt) return false;
+        mysqli_stmt_bind_param($stmt, 's', $mapb);
+        mysqli_stmt_execute($stmt);
+        return mysqli_stmt_get_result($stmt);
+    }
+    return mysqli_query($conn, $sql);
+}
+
+$r1 = execQuery($conn, $sqlNoCert, $mapb);
 if (!$r1) sendError('Lỗi truy vấn: ' . mysqli_error($conn), 500);
 while ($r = mysqli_fetch_assoc($r1)) $noCertList[] = $r;
 
-$r2 = mysqli_query($conn, $sqlNoAllocate);
+$r2 = execQuery($conn, $sqlNoAllocate, $mapb);
 if (!$r2) sendError('Lỗi truy vấn: ' . mysqli_error($conn), 500);
 while ($r = mysqli_fetch_assoc($r2)) $noAllocateList[] = $r;
 
@@ -84,8 +94,14 @@ $pbList = [];
 if ($resPb) while ($pb = mysqli_fetch_assoc($resPb)) $pbList[] = $pb;
 
 // Tổng NV
-$qTong  = "SELECT COUNT(*) AS tong FROM bhld_nhanvien" . ($mapb !== '' ? " WHERE mapb = '$mapb'" : '');
-$rTong  = mysqli_query($conn, $qTong);
+if ($mapb !== '') {
+    $stmtTong = mysqli_prepare($conn, "SELECT COUNT(*) AS tong FROM bhld_nhanvien WHERE mapb = ?");
+    mysqli_stmt_bind_param($stmtTong, 's', $mapb);
+    mysqli_stmt_execute($stmtTong);
+    $rTong = mysqli_stmt_get_result($stmtTong);
+} else {
+    $rTong = mysqli_query($conn, "SELECT COUNT(*) AS tong FROM bhld_nhanvien");
+}
 $tongNV = $rTong ? intval(mysqli_fetch_assoc($rTong)['tong']) : 0;
 
 sendSuccess([
