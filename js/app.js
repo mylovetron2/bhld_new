@@ -3652,7 +3652,7 @@ function exportUncappedCsv() {
   const BOM   = '\uFEFF';
   const rows  = [['Nhóm', 'Mã NV', 'Họ tên', 'Bộ phận', 'Mã CT', 'Ngày CT']];
   (uncData.no_allocate || []).forEach(r =>
-    rows.push(['Có CT, chưa cấp phát', r.manv, r.tennhanvien || '', r.tenphongban || r.mapb || '', r.mact || '', r.ngct || '']));
+    rows.push(['Có CT tới tháng chọn, chưa cấp phát', r.manv, r.tennhanvien || '', r.tenphongban || r.mapb || '', r.mact || '', r.ngct || '']));
   const csv  = BOM + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);

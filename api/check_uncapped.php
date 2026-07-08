@@ -1,6 +1,6 @@
 <?php
 /**
- * API Kiểm tra nhân viên chưa được cấp phát trong tháng
+ * API Kiểm tra nhân viên có chứng từ nhưng chưa được cấp phát đến tháng chọn
  * GET /check_uncapped.php
  *
  * Tham số:
@@ -23,7 +23,7 @@ $mapb     = isset($_GET['mapb']) ? trim($_GET['mapb']) : '';
 $pbFilter = $mapb !== '' ? "AND nv.mapb = ?" : '';
 
 // ---------------------------------------------------------------
-// Nhóm 2: NV có chứng từ trong tháng nhưng CHƯA cấp phát vật tư nào (sl > 0)
+// Nhóm 2: NV có chứng từ đến tháng chọn nhưng CHƯA cấp phát vật tư nào (sl > 0)
 // Dùng LEFT JOIN + IS NULL thay vì NOT EXISTS cho hiệu năng tốt hơn.
 // ---------------------------------------------------------------
 $sqlNoAllocate = "SELECT
@@ -37,7 +37,6 @@ $sqlNoAllocate = "SELECT
     FROM bhld_nhanvien nv
     LEFT JOIN bhld_phongban pb ON pb.mapb = nv.mapb
     JOIN bhld_ctu ct ON ct.manv = nv.manv
-              AND ct.ngct >= '$fromDate'
               AND ct.ngct <= '$toDate'
     LEFT JOIN bhld_ctctu ctu_chk ON ctu_chk.mact = ct.mact AND ctu_chk.sl > 0
     WHERE ctu_chk.mact IS NULL
@@ -85,7 +84,7 @@ sendSuccess([
     'tong_no_allocate' => count($noAllocateList),
     'no_allocate'      => $noAllocateList,
     'phong_ban_list'   => $pbList,
-], "Kiểm tra cấp phát tháng $monthParam");
+], "Kiểm tra cấp phát đến tháng $monthParam");
 
 mysqli_close($conn);
 ?>
