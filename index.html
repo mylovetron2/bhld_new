@@ -46,6 +46,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" data-tab="recall" href="#">
+        <i class="bi bi-arrow-return-left me-1"></i>Thu Hồi
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" data-tab="equipment" href="#">
         <i class="bi bi-box-seam me-1"></i>Danh Mục VT
       </a>
@@ -210,6 +215,10 @@
         <button class="btn btn-primary btn-sm ms-md-auto" id="emp-add-btn">
           <i class="bi bi-person-plus me-1"></i>Thêm NV
         </button>
+        <div class="form-check form-switch mb-0 ms-2">
+          <input class="form-check-input" type="checkbox" id="emp-show-all" role="switch">
+          <label class="form-check-label small" for="emp-show-all">Hiện cả NV đã nghỉ</label>
+        </div>
         <button class="btn btn-outline-secondary btn-sm" id="emp-reload-btn">
           <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -256,9 +265,13 @@
             <i class="bi bi-people-fill me-1"></i>Tải cả đội
           </button>
         </div>
-        <select class="form-select form-select-sm" id="alloc-pb-filter">
+        <select class="form-select form-select-sm mb-1" id="alloc-pb-filter">
           <option value="">-- Tất cả đội --</option>
         </select>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="alloc-emp-search" placeholder="Tên hoặc danh số...">
+        </div>
       </div>
       <!-- NV list -->
       <div id="alloc-emp-list" class="overflow-auto flex-grow-1 py-1">
@@ -402,9 +415,8 @@
     <button class="btn btn-outline-secondary btn-sm" id="rpt-next-btn"><i class="bi bi-chevron-right"></i></button>
     <button class="btn btn-primary btn-sm" id="rpt-load-btn"><i class="bi bi-arrow-clockwise me-1"></i>Tải lại</button>
     <div class="vr mx-1"></div>
-    <button class="btn btn-outline-success btn-sm" id="rpt-print-btn"><i class="bi bi-printer me-1"></i>In đã nhận</button>
-    <button class="btn btn-outline-primary btn-sm" id="rpt-print-total-btn" disabled><i class="bi bi-file-earmark-bar-graph me-1"></i>In tổng hợp</button>
-    <button class="btn btn-outline-secondary btn-sm" id="rpt-export-word-btn"><i class="bi bi-file-earmark-word me-1"></i>In cấp phát</button>
+    <button class="btn btn-outline-success btn-sm" id="rpt-print-btn"><i class="bi bi-printer me-1"></i>In tổng hợp</button>
+    <button class="btn btn-outline-secondary btn-sm" id="rpt-export-word-btn"><i class="bi bi-file-earmark-word me-1"></i>Xuất Word</button>
     <!-- Hidden inputs kept for compat -->
     <input type="hidden" id="rpt-month" /><input type="hidden" id="rpt-year" />
   </div>
@@ -533,7 +545,7 @@
     <!-- Thẻ tổng hợp -->
     <div class="col-12">
       <div class="row g-2">
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-4">
           <div class="card border-0 shadow-sm text-center py-2">
             <div class="card-body p-2">
               <div class="fs-4 fw-bold text-primary" id="unc-stat-tong">—</div>
@@ -541,15 +553,7 @@
             </div>
           </div>
         </div>
-        <div class="col-6 col-md-3">
-          <div class="card border-0 shadow-sm text-center py-2">
-            <div class="card-body p-2">
-              <div class="fs-4 fw-bold text-danger" id="unc-stat-nocert">—</div>
-              <div class="small text-muted">Chưa có chứng từ</div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-4">
           <div class="card border-0 shadow-sm text-center py-2">
             <div class="card-body p-2">
               <div class="fs-4 fw-bold text-warning" id="unc-stat-noalloc">—</div>
@@ -557,7 +561,7 @@
             </div>
           </div>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-4">
           <div class="card border-0 shadow-sm text-center py-2">
             <div class="card-body p-2">
               <div class="fs-4 fw-bold text-success" id="unc-stat-done">—</div>
@@ -572,30 +576,6 @@
       <div id="unc-loading" class="text-center py-5 d-none">
         <div class="spinner-border text-primary" role="status"></div>
         <p class="text-muted mt-2">Đang tải...</p>
-      </div>
-      <!-- Bảng NV chưa có chứng từ -->
-      <div id="unc-nocert-wrap">
-        <div class="card shadow-sm mb-3">
-          <div class="card-header bg-danger bg-opacity-10 d-flex justify-content-between align-items-center">
-            <h6 class="mb-0 text-danger"><i class="bi bi-x-circle me-2"></i>Chưa có chứng từ trong tháng</h6>
-            <span class="badge bg-danger" id="unc-nocert-badge">0</span>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Mã NV</th>
-                  <th>Họ tên</th>
-                  <th>Bộ phận</th>
-                </tr>
-              </thead>
-              <tbody id="unc-nocert-tbody"></tbody>
-            </table>
-          </div>
-          <div id="unc-nocert-empty" class="text-center py-3 text-success d-none">
-            <i class="bi bi-check-circle-fill me-1"></i>Tất cả nhân viên đã có chứng từ
-          </div>
-        </div>
       </div>
       <!-- Bảng NV có CT nhưng chưa cấp phát -->
       <div id="unc-noalloc-wrap">
@@ -962,6 +942,91 @@
                 <p class="mt-2">Không có vật tư nào cần cấp phát trong khoảng thời gian này.</p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: THU HỒI -->
+<div id="tab-recall" class="tab-panel d-none" style="height:calc(100vh - 96px);overflow:hidden">
+  <div class="d-flex h-100">
+    <!-- Sidebar NV -->
+    <div class="border-end bg-white d-flex flex-column" style="width:280px;min-width:220px;max-width:320px">
+      <div class="px-3 py-2 border-bottom bg-danger bg-opacity-10">
+        <div class="fw-bold text-danger-emphasis mb-1"><i class="bi bi-arrow-return-left me-1"></i>Thu hồi thiết bị</div>
+        <div class="input-group input-group-sm mb-1">
+          <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+          <input type="month" class="form-control" id="recall-month" />
+        </div>
+        <select class="form-select form-select-sm mb-1" id="recall-pb-filter">
+          <option value="">-- Tất cả đội --</option>
+        </select>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="recall-emp-search" placeholder="Tên hoặc danh số...">
+        </div>
+      </div>
+      <div id="recall-emp-list" class="overflow-auto flex-grow-1 py-1">
+        <div class="text-center text-muted py-4 small">Đang tải...</div>
+      </div>
+    </div>
+    <!-- Main content -->
+    <div class="flex-grow-1 d-flex flex-column overflow-hidden">
+      <div class="px-3 py-2 border-bottom bg-light d-flex align-items-center gap-2 flex-wrap">
+        <div id="recall-emp-info" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>Chọn nhân viên bên trái</div>
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <label class="form-label small text-muted mb-0">Ngày thu hồi:</label>
+          <input type="date" class="form-control form-control-sm" id="recall-date" style="width:145px" />
+        </div>
+      </div>
+      <div class="flex-grow-1 overflow-auto p-3">
+        <div id="recall-loading" class="text-center py-5 d-none">
+          <div class="spinner-border text-danger" role="status"></div>
+          <p class="text-muted mt-2">Đang tải...</p>
+        </div>
+        <div id="recall-empty" class="text-center py-5 d-none">
+          <i class="bi bi-check2-circle fs-1 text-success"></i>
+          <p class="text-muted mt-2">Không có vật tư cần thu hồi trong tháng này</p>
+        </div>
+        <div id="recall-table-wrap" class="d-none">
+          <div class="fw-semibold mb-2 text-danger"><i class="bi bi-box-seam me-1"></i>Vật tư đã cấp phát — chọn để thu hồi</div>
+          <div class="table-responsive mb-4">
+            <table class="table table-sm table-bordered align-middle mb-0">
+              <thead class="table-danger">
+                <tr>
+                  <th>Mã CT</th>
+                  <th>Vật tư</th>
+                  <th class="text-center">ĐVT</th>
+                  <th class="text-center">ĐMTG</th>
+                  <th>Ngày nhận</th>
+                  <th>Lý do thu hồi</th>
+                  <th class="text-center">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="recall-tbody"></tbody>
+            </table>
+          </div>
+          <div class="fw-semibold mb-2 text-secondary"><i class="bi bi-clock-history me-1"></i>Lịch sử thu hồi</div>
+          <div id="recall-history-loading" class="text-center py-3 d-none">
+            <div class="spinner-border spinner-border-sm text-secondary"></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Mã CT</th>
+                  <th>Vật tư</th>
+                  <th class="text-center">Ngày cấp</th>
+                  <th class="text-center">Ngày thu hồi</th>
+                  <th>Lý do</th>
+                </tr>
+              </thead>
+              <tbody id="recall-history-tbody">
+                <tr><td colspan="5" class="text-center text-muted fst-italic py-3">Chưa có lịch sử</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

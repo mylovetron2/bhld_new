@@ -3587,7 +3587,7 @@ async function loadUncapped() {
   const loading = document.getElementById('unc-loading');
 
   loading.classList.remove('d-none');
-  ['unc-nocert-tbody', 'unc-noalloc-tbody'].forEach(id => document.getElementById(id).innerHTML = '');
+  document.getElementById('unc-noalloc-tbody').innerHTML = '';
 
   try {
     let url = `/check_uncapped.php?month=${encodeURIComponent(month)}`;
@@ -3611,17 +3611,12 @@ async function loadUncapped() {
     }
 
     // Đếm theo NV duy nhất để tránh overcount khi 1 NV có nhiều chứng từ trong tháng.
-    const noCertSet  = new Set((data.no_cert || []).map(r => String(r.manv || '')));
     const noAllocSet = new Set((data.no_allocate || []).map(r => String(r.manv || '')));
-    const pendingSet = new Set([...noCertSet, ...noAllocSet]);
-    const noCert     = noCertSet.size;
     const noAlloc    = noAllocSet.size;
-    const done       = Math.max(0, (data.tong_nv || 0) - pendingSet.size);
+    const done       = Math.max(0, (data.tong_nv || 0) - noAlloc);
     document.getElementById('unc-stat-tong').textContent    = data.tong_nv || 0;
-    document.getElementById('unc-stat-nocert').textContent  = noCert;
     document.getElementById('unc-stat-noalloc').textContent = noAlloc;
     document.getElementById('unc-stat-done').textContent    = done;
-    document.getElementById('unc-nocert-badge').textContent  = noCert;
     document.getElementById('unc-noalloc-badge').textContent = noAlloc;
 
     renderUncapped(data);
@@ -3633,21 +3628,6 @@ async function loadUncapped() {
 }
 
 function renderUncapped(data) {
-  const tbody1 = document.getElementById('unc-nocert-tbody');
-  const empty1 = document.getElementById('unc-nocert-empty');
-  const list1  = data.no_cert || [];
-  if (list1.length === 0) {
-    tbody1.innerHTML = '';
-    empty1.classList.remove('d-none');
-  } else {
-    empty1.classList.add('d-none');
-    tbody1.innerHTML = list1.map(r =>
-      `<tr><td><code>${escHtml(r.manv)}</code></td>` +
-      `<td>${escHtml(r.tennhanvien || '')}</td>` +
-      `<td>${escHtml(r.tenphongban || r.mapb || '')}</td></tr>`
-    ).join('');
-  }
-
   const tbody2 = document.getElementById('unc-noalloc-tbody');
   const empty2 = document.getElementById('unc-noalloc-empty');
   const list2  = data.no_allocate || [];
@@ -3671,8 +3651,6 @@ function exportUncappedCsv() {
   const month = document.getElementById('unc-month').value || 'unknown';
   const BOM   = '\uFEFF';
   const rows  = [['Nhóm', 'Mã NV', 'Họ tên', 'Bộ phận', 'Mã CT', 'Ngày CT']];
-  (uncData.no_cert || []).forEach(r =>
-    rows.push(['Chưa có chứng từ', r.manv, r.tennhanvien || '', r.tenphongban || r.mapb || '', '', '']));
   (uncData.no_allocate || []).forEach(r =>
     rows.push(['Có CT, chưa cấp phát', r.manv, r.tennhanvien || '', r.tenphongban || r.mapb || '', r.mact || '', r.ngct || '']));
   const csv  = BOM + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');

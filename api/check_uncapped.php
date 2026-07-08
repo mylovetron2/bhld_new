@@ -23,27 +23,6 @@ $mapb     = isset($_GET['mapb']) ? trim($_GET['mapb']) : '';
 $pbFilter = $mapb !== '' ? "AND nv.mapb = ?" : '';
 
 // ---------------------------------------------------------------
-// Nhóm 1: NV chưa có chứng từ nào trong tháng
-// Dùng LEFT JOIN + IS NULL thay vì NOT EXISTS cho hiệu năng tốt hơn.
-// ---------------------------------------------------------------
-$sqlNoCert = "SELECT
-        nv.manv,
-        nv.tennhanvien,
-        nv.mapb,
-        pb.tenphong AS tenphongban,
-        'no_cert'   AS ly_do,
-        NULL        AS mact,
-        NULL        AS ngct
-    FROM bhld_nhanvien nv
-    LEFT JOIN bhld_phongban pb ON pb.mapb = nv.mapb
-    LEFT JOIN bhld_ctu ct_chk ON ct_chk.manv = nv.manv
-        AND ct_chk.ngct >= '$fromDate'
-        AND ct_chk.ngct <= '$toDate'
-    WHERE ct_chk.mact IS NULL
-    $pbFilter
-    ORDER BY nv.mapb, nv.tennhanvien";
-
-// ---------------------------------------------------------------
 // Nhóm 2: NV có chứng từ trong tháng nhưng CHƯA cấp phát vật tư nào (sl > 0)
 // Dùng LEFT JOIN + IS NULL thay vì NOT EXISTS cho hiệu năng tốt hơn.
 // ---------------------------------------------------------------
@@ -65,9 +44,7 @@ $sqlNoAllocate = "SELECT
     $pbFilter
     ORDER BY nv.mapb, nv.tennhanvien";
 
-$noCertList     = [];
 $noAllocateList = [];
-
 // Hàm thực thi query có hoặc không bind param mapb
 function execQuery($conn, $sql, $mapb) {
     if ($mapb !== '') {
@@ -79,10 +56,6 @@ function execQuery($conn, $sql, $mapb) {
     }
     return mysqli_query($conn, $sql);
 }
-
-$r1 = execQuery($conn, $sqlNoCert, $mapb);
-if (!$r1) sendError('Lỗi truy vấn: ' . mysqli_error($conn), 500);
-while ($r = mysqli_fetch_assoc($r1)) $noCertList[] = $r;
 
 $r2 = execQuery($conn, $sqlNoAllocate, $mapb);
 if (!$r2) sendError('Lỗi truy vấn: ' . mysqli_error($conn), 500);
@@ -109,9 +82,7 @@ sendSuccess([
     'from_date'        => $fromDate,
     'to_date'          => $toDate,
     'tong_nv'          => $tongNV,
-    'tong_no_cert'     => count($noCertList),
     'tong_no_allocate' => count($noAllocateList),
-    'no_cert'          => $noCertList,
     'no_allocate'      => $noAllocateList,
     'phong_ban_list'   => $pbList,
 ], "Kiểm tra cấp phát tháng $monthParam");
