@@ -14,12 +14,17 @@ if (ini_get('session.use_cookies')) {
         '',
         time() - 42000,
         $params['path'],
-        $params['domain'] ?? '',
+        isset($params['domain']) ? $params['domain'] : '',
         $params['secure'],
         $params['httponly']
     );
 }
 
 session_destroy();
+
+$isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+setcookie('bhld_auth', '', time() - 42000, '/', '', $isHttps, true);
+setcookie('bhld_user', '', time() - 42000, '/', '', $isHttps, true);
+
 sendSuccess(null, 'Đăng xuất thành công');
 ?>

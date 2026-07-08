@@ -6,12 +6,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $input = json_decode(file_get_contents('php://input'), true);
-$username = trim($input['username'] ?? '');
-$password = trim($input['password'] ?? '');
+$username = trim(isset($input['username']) ? $input['username'] : '');
+$password = trim(isset($input['password']) ? $input['password'] : '');
 
 if ($username === 'admin' && $password === '1234') {
+    $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
     $_SESSION['bhld_auth'] = true;
     $_SESSION['bhld_user'] = 'admin';
+
+    setcookie('bhld_auth', '1', time() + 86400, '/', '', $isHttps, true);
+    setcookie('bhld_user', 'admin', time() + 86400, '/', '', $isHttps, true);
+
     sendSuccess(['username' => 'admin'], 'Đăng nhập thành công');
 }
 

@@ -1,11 +1,14 @@
 <?php
+ob_start();
 require_once 'config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    ob_end_clean();
     sendError('Method không được hỗ trợ', 405);
 }
 
 @set_time_limit(0);
+@ini_set('memory_limit', '256M');
 
 function sqlValue($conn, $value) {
     if ($value === null) {
@@ -139,7 +142,9 @@ try {
 
     streamLine('SET FOREIGN_KEY_CHECKS = 1;');
     streamLine('-- End of backup');
-} catch (Exception $e) {
+    ob_end_flush();
+} catch (\Throwable $e) {
+    ob_end_clean();
     header_remove('Content-Disposition');
     header_remove('Content-Type');
     header('Content-Type: application/json; charset=UTF-8');

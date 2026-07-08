@@ -57,7 +57,12 @@ try {
         if ($affected === 0) {
             sendError('Thiết bị đã được cấp phát hoặc không tồn tại', 400);
         }
-        
+
+        // Cập nhật tồn kho: tăng số lượng đã cấp phát
+        mysqli_query($conn, "UPDATE bhld_tonkho
+                             SET so_luong_cap_phat = so_luong_cap_phat + 1
+                             WHERE mavt = $mavt");
+
         sendSuccess([
             'mact' => $mact,
             'mavt' => $mavt,

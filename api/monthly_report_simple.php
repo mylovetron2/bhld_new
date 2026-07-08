@@ -32,6 +32,7 @@ try {
         FROM bhld_phongban pb
         LEFT JOIN bhld_nhanvien nv ON pb.mapb = nv.mapb
         WHERE nv.manv IS NOT NULL
+          AND COALESCE(nv.trangthai, 1) = 1
         GROUP BY pb.mapb, pb.tenphong
         ORDER BY pb.mapb
         LIMIT 5

@@ -9,6 +9,7 @@
 // ===== CẤU HÌNH DATABASE =====
 // Thay đổi các thông số sau cho phù hợp với server
 $db_config = [
+    //'host'     => 'localhost', // Thay 'localhost' bằng 'diavatly.com' nếu database nằm trên server diavatly.com
     'host'     => 'diavatly.com',
     'username' => 'diavatly_ltd',
     'password' => '12345678',

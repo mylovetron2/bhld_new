@@ -77,18 +77,24 @@ try {
         // Get list of employees with optional search
         else {
             $search = isset($_GET['search']) ? mysqli_real_escape_string($conn, $_GET['search']) : '';
+            $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
             
             $sql = "SELECT 
                         nv.manv,
                         nv.tennhanvien,
                         nv.mapb,
                         nv.dinhmuc,
+                        COALESCE(nv.trangthai, 1) as trangthai,
                         pb.tenphong as tenphongban
                         $profileSelect
                     FROM bhld_nhanvien nv
                     LEFT JOIN bhld_phongban pb ON nv.mapb = pb.mapb
                     $profileJoin
                     WHERE 1=1";
+            
+            if (!$showAll) {
+                $sql .= " AND COALESCE(nv.trangthai, 1) = 1";
+            }
             
             if (!empty($search)) {
                 $sql .= " AND (nv.manv LIKE '%$search%' 
@@ -165,6 +171,7 @@ try {
         $sets = [];
         if (isset($input['tennhanvien'])) $sets[] = "tennhanvien = '" . mysqli_real_escape_string($conn, $input['tennhanvien']) . "'";
         if (isset($input['mapb']))        $sets[] = "mapb = '"        . mysqli_real_escape_string($conn, $input['mapb'])        . "'";
+        if (isset($input['trangthai']))   $sets[] = "trangthai = " . (intval($input['trangthai']) === 1 ? '1' : '0');
         if (array_key_exists('dinhmuc', $input)) {
             $dm = $input['dinhmuc'] !== '' && $input['dinhmuc'] !== null
                 ? "'" . mysqli_real_escape_string($conn, $input['dinhmuc']) . "'"
@@ -204,25 +211,17 @@ try {
         
         $manv = mysqli_real_escape_string($conn, $input['manv']);
         
-        // Check if employee has certificates
-        $checkCerts = mysqli_query($conn, "SELECT COUNT(*) as count FROM bhld_ctu WHERE manv = '$manv'");
-        if ($checkCerts) {
-            $result = mysqli_fetch_assoc($checkCerts);
-            if ($result['count'] > 0) {
-                sendError('Không thể xóa nhân viên này vì còn ' . $result['count'] . ' chứng từ liên quan', 400);
-            }
-        }
-        
-        $sql = "DELETE FROM bhld_nhanvien WHERE manv = '$manv'";
+        // Đánh dấu nghỉ việc thay vì xóa thật (giữ lại lịch sử chứng từ)
+        $sql = "UPDATE bhld_nhanvien SET trangthai = 0 WHERE manv = '$manv'";
         
         if (mysqli_query($conn, $sql)) {
             if (mysqli_affected_rows($conn) > 0) {
-                sendSuccess(['manv' => $manv], 'Xóa nhân viên thành công');
+                sendSuccess(['manv' => $manv], 'Đã đánh dấu nhân viên nghỉ việc');
             } else {
                 sendError('Không tìm thấy nhân viên', 404);
             }
         } else {
-            sendError('Lỗi xóa nhân viên: ' . mysqli_error($conn), 500);
+            sendError('Lỗi cập nhật: ' . mysqli_error($conn), 500);
         }
     }
     else {

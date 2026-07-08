@@ -9,8 +9,20 @@ function columnExists($conn, $tableName, $columnName) {
     return $r && mysqli_num_rows($r) > 0;
 }
 
+function tableExists($conn, $tableName) {
+    $tableName = mysqli_real_escape_string($conn, $tableName);
+    $sql = "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '$tableName' LIMIT 1";
+    $r = mysqli_query($conn, $sql);
+    return $r && mysqli_num_rows($r) > 0;
+}
+
 function normalizeText($s) {
-    $s = mb_strtolower(trim((string)$s), 'UTF-8');
+    $s = trim((string)$s);
+    if (function_exists('mb_strtolower')) {
+        $s = mb_strtolower($s, 'UTF-8');
+    } else {
+        $s = strtolower($s);
+    }
     $map = [
         'à'=>'a','á'=>'a','ạ'=>'a','ả'=>'a','ã'=>'a',
         'â'=>'a','ầ'=>'a','ấ'=>'a','ậ'=>'a','ẩ'=>'a','ẫ'=>'a',
@@ -30,27 +42,44 @@ function normalizeText($s) {
     return preg_replace('/\s+/', ' ', $s);
 }
 
-function detectEquipmentBucket($name) {
-    $name = normalizeText($name);
-    $rules = [
-        'Giày' => ['giay'],
-        'Mũ' => ['mu'],
-        'Áo quần' => ['ao quan', 'quan ao'],
-        'Kính' => ['kinh'],
-        'Áo mưa' => ['ao mua'],
-        'Nút tai' => ['nut tai'],
-        'Phim' => ['phin', 'phim'],
-        'Găng tay' => ['gang tay'],
-        'Khẩu trang' => ['khau trang'],
-        'Áo phao cứu sinh' => ['ao phao', 'cuu sinh'],
-        'Găng tay da thợ hàn' => ['gang tay da', 'tho han'],
+function detectEquipmentBucket($mavt, $tenvt) {
+    // Map trực tiếp mã vật tư → bucket (chính xác 100%, không cần đoán qua tên)
+    $mavtMap = [
+        '500120' => 'Giày',
+        '500500' => 'Mũ',
+        '500860' => 'Áo quần',
+        '501545' => 'Kính',
+        '501660' => 'Áo mưa',
+        '60000'  => 'Áo phao cứu sinh',
+        '10000'  => 'Nút tai',
+        '20000'  => 'Phim',
+        '30000'  => 'Găng tay',
+        '40000'  => 'Khẩu trang',
+        '70000'  => 'Găng tay da thợ hàn',
     ];
+    $key = (string)$mavt;
+    if (isset($mavtMap[$key])) return $mavtMap[$key];
 
+    // Fallback: thử khớp tên nếu gặp mã vật tư mới chưa có trong map
+    $name = normalizeText((string)$tenvt);
+    $rules = [
+        'Áo mưa'              => ['ao bat di mua', 'ao mua', 'bat mua'],
+        'Áo phao cứu sinh'    => ['ao phao', 'cuu sinh'],
+        'Áo quần'             => ['ao quan bao ho', 'quan ao bao ho', 'ao quan', 'quan ao'],
+        'Găng tay da thợ hàn' => ['gang tay da'],
+        'Găng tay'            => ['gang tay'],
+        'Khẩu trang'          => ['khau trang'],
+        'Kính'                => ['kinh bao ho', 'kinh'],
+        'Giày'                => ['giay bao ho', 'giay'],
+        'Mũ'                  => ['mu bao ho', 'mu'],
+        'Nút tai'             => ['nut tai'],
+        'Phim'                => ['phin loc', 'phin', 'phim'],
+    ];
     foreach ($rules as $bucket => $keywords) {
         foreach ($keywords as $kw) {
-            if (strpos($name, normalizeText($kw)) !== false) {
-                return $bucket;
-            }
+            $normalizedKw = normalizeText($kw);
+            $pattern = '/(?<![a-z])' . preg_quote($normalizedKw, '/') . '(?![a-z])/u';
+            if (preg_match($pattern, $name)) return $bucket;
         }
     }
     return null;
@@ -78,6 +107,19 @@ try {
     $endDate = date("Y-m-t", strtotime($startDate));
     $nextMonthStart = date("Y-m-01", strtotime($startDate . " +1 month"));
 
+    if (!tableExists($conn, 'bhld_view_chungtu_danhan_final')) {
+        sendSuccess([
+            'month' => "$monthNum/$year",
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'departments' => [],
+            'summary' => [
+                'items' => [],
+                'totalQuantity' => 0
+            ]
+        ], 'Chưa có dữ liệu báo cáo trên host mới');
+    }
+
     // Danh sách thiết bị chuẩn (mở rộng)
     $standardEquipment = ['Giày', 'Mũ', 'Áo quần', 'Kính', 'Áo mưa', 'Nút tai', 'Phim', 'Găng tay', 'Khẩu trang', 'Áo phao cứu sinh', 'Găng tay da thợ hàn'];
 
@@ -100,6 +142,7 @@ try {
              LEFT JOIN bhld_dmvattu vt ON vt.mavt = f.mavt
              WHERE f.ngnhan >= '$escStart'
                AND f.ngnhan < '$escNext'
+               AND COALESCE(nv.trangthai, 1) = 1
              GROUP BY
                 f.mapb, pb.tenphong,
                 f.manv, nv.tennhanvien,
@@ -119,7 +162,7 @@ try {
         $empCode = (string)$row['manv'];
         $empName = (string)$row['tennhanvien'];
         $sl = (int)$row['sl_cap'];
-        $bucket = detectEquipmentBucket((string)($row['tenvt'] ?? ''));
+        $bucket = detectEquipmentBucket($row['mavt'], isset($row['tenvt']) ? $row['tenvt'] : '');
 
         if (!isset($departments[$deptCode])) {
             $departments[$deptCode] = [

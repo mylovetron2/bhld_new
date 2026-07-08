@@ -81,9 +81,12 @@ const API = {
   },
 
   // ===== NHÂN VIÊN =====
-  getEmployees(search) {
-    const params = search ? `?search=${encodeURIComponent(search)}` : '';
-    return apiFetch(`/employees.php${params}`);
+  getEmployees(search, showAll = false) {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (showAll) params.set('show_all', '1');
+    const qs = params.toString();
+    return apiFetch(`/employees.php${qs ? '?' + qs : ''}`);
   },
   getEmployee(manv) {
     return apiFetch(`/employees.php?manv=${encodeURIComponent(manv)}`);
@@ -170,6 +173,13 @@ const API = {
     });
   },
 
+  // ===== CẤP PHÁT PENDING (1 request thay vì N+1) =====
+  getAllocPending(manv, to_date) {
+    const q = new URLSearchParams({ manv });
+    if (to_date) q.set('to_date', to_date);
+    return apiFetch(`/alloc_pending.php?${q.toString()}`);
+  },
+
   // ===== CHI TIẾT CHỨNG TỪ =====
   getCertificateDetails(mact) {
     return apiFetch(`/certificate_details.php?mact=${encodeURIComponent(mact)}`);
@@ -234,6 +244,20 @@ const API = {
     return apiFetch('/deallocate_v2.php', {
       method: 'POST',
       body: JSON.stringify({ mact, mavt }),
+    });
+  },
+
+  // ===== THU HỒI =====
+  getRecallItems(manv, month) {
+    return apiFetch(`/recall.php?manv=${encodeURIComponent(manv)}&month=${encodeURIComponent(month)}`);
+  },
+  getRecallHistory(manv, limit = 100) {
+    return apiFetch(`/recall.php?history=1&manv=${encodeURIComponent(manv)}&limit=${limit}`);
+  },
+  doRecall(mact, mavt, ngay_thuhoi, ly_do) {
+    return apiFetch('/recall.php', {
+      method: 'POST',
+      body: JSON.stringify({ mact, mavt, ngay_thuhoi, ly_do }),
     });
   },
 

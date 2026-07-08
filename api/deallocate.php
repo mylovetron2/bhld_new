@@ -68,7 +68,12 @@ try {
         if ($affected === 0) {
             sendError('Thiết bị chưa được cấp phát hoặc không tồn tại', 400);
         }
-        
+
+        // Cập nhật tồn kho: giảm số lượng đã cấp phát
+        mysqli_query($conn, "UPDATE bhld_tonkho
+                             SET so_luong_cap_phat = GREATEST(0, so_luong_cap_phat - 1)
+                             WHERE mavt = $mavt");
+
         // Step 2: DELETE next period detail record
         // Get master record info
         $sql_master = "SELECT manv, mapb, ngct FROM bhld_ctu WHERE mact = '$mact'";
