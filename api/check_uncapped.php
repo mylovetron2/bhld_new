@@ -21,6 +21,7 @@ $toDate   = date('Y-m-t', strtotime($fromDate));
 
 $mapb     = isset($_GET['mapb']) ? trim($_GET['mapb']) : '';
 $pbFilter = $mapb !== '' ? "AND nv.mapb = ?" : '';
+$employeeFilter = "AND COALESCE(nv.trangthai, 1) = 1 AND TRIM(COALESCE(nv.tennhanvien, '')) <> ''";
 
 // ---------------------------------------------------------------
 // Nhóm 2: NV có chứng từ đến tháng chọn nhưng CHƯA cấp phát vật tư nào (sl > 0)
@@ -40,6 +41,7 @@ $sqlNoAllocate = "SELECT
               AND ct.ngct <= '$toDate'
     LEFT JOIN bhld_ctctu ctu_chk ON ctu_chk.mact = ct.mact AND ctu_chk.sl > 0
     WHERE ctu_chk.mact IS NULL
+    $employeeFilter
     $pbFilter
     ORDER BY nv.mapb, nv.tennhanvien";
 
@@ -67,12 +69,12 @@ if ($resPb) while ($pb = mysqli_fetch_assoc($resPb)) $pbList[] = $pb;
 
 // Tổng NV
 if ($mapb !== '') {
-    $stmtTong = mysqli_prepare($conn, "SELECT COUNT(*) AS tong FROM bhld_nhanvien WHERE mapb = ?");
+    $stmtTong = mysqli_prepare($conn, "SELECT COUNT(*) AS tong FROM bhld_nhanvien nv WHERE nv.mapb = ? AND COALESCE(nv.trangthai, 1) = 1 AND TRIM(COALESCE(nv.tennhanvien, '')) <> ''");
     mysqli_stmt_bind_param($stmtTong, 's', $mapb);
     mysqli_stmt_execute($stmtTong);
     $rTong = mysqli_stmt_get_result($stmtTong);
 } else {
-    $rTong = mysqli_query($conn, "SELECT COUNT(*) AS tong FROM bhld_nhanvien");
+    $rTong = mysqli_query($conn, "SELECT COUNT(*) AS tong FROM bhld_nhanvien nv WHERE COALESCE(nv.trangthai, 1) = 1 AND TRIM(COALESCE(nv.tennhanvien, '')) <> ''");
 }
 $tongNV = $rTong ? intval(mysqli_fetch_assoc($rTong)['tong']) : 0;
 
