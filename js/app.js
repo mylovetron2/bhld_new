@@ -932,8 +932,8 @@ async function initEmployeesTab() {
     document.getElementById('emp-search').addEventListener('keydown', e => {
       if (e.key === 'Enter') applyEmpFilter();
     });
-    document.getElementById('emp-reload-btn').addEventListener('click', () => loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all')?.checked));
-    document.getElementById('emp-show-all').addEventListener('change', () => loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all').checked));
+    document.getElementById('emp-reload-btn').addEventListener('click', () => loadEmployees('', document.getElementById('emp-show-all')?.checked));
+    document.getElementById('emp-show-all').addEventListener('change', () => loadEmployees('', document.getElementById('emp-show-all').checked));
     document.getElementById('emp-add-btn').addEventListener('click', () => openEmpModal(null));
     document.getElementById('emp-save-btn').addEventListener('click', saveEmployee);
     document.getElementById('emp-policy-add-row-btn').addEventListener('click', () => addEmpPolicyRow());
@@ -1191,14 +1191,18 @@ async function loadEmployeePolicyForModal(manv) {
 }
 
 function applyEmpFilter() {
-  const q = document.getElementById('emp-search').value.trim().toLowerCase();
-  const pb = document.getElementById('emp-pb-filter').value;
+  const qRaw = document.getElementById('emp-search').value.trim();
+  const q = normalizeVietnameseText(qRaw);
+  const pb = (document.getElementById('emp-pb-filter').value || '').trim();
   let list = empAllList;
   if (pb) list = list.filter(e => e.mapb === pb);
-  if (q) list = list.filter(e =>
-    (e.manv||'').toLowerCase().includes(q) ||
-    (e.tennhanvien||'').toLowerCase().includes(q)
-  );
+  if (q) {
+    list = list.filter(e => {
+      const manv = normalizeVietnameseText(e.manv || '');
+      const ten = normalizeVietnameseText(e.tennhanvien || '');
+      return manv.includes(q) || ten.includes(q);
+    });
+  }
   renderEmployeeTable(list);
 }
 
@@ -1228,7 +1232,9 @@ async function loadEmployees(search, showAll = false) {
           });
         }
       }
-      renderEmployeeTable(res.data);
+      // Always apply current UI filters on the freshly loaded dataset
+      // so repeated searches still work after actions like "Nghỉ việc".
+      applyEmpFilter();
     }
   } catch (err) {
     showToast('Lỗi tải nhân viên: ' + err.message, 'danger');
@@ -1280,7 +1286,7 @@ function deleteEmployee(manv, tennhanvien) {
       const res = await API.deleteEmployee(manv);
       if (res.success) {
         showToast('Đã đánh dấu nhân viên nghỉ việc', 'success');
-        loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all')?.checked);
+        loadEmployees('', document.getElementById('emp-show-all')?.checked);
       } else {
         showToast(res.message || 'Thao tác thất bại', 'danger');
       }
@@ -1296,7 +1302,7 @@ function reactivateEmployee(manv, tennhanvien) {
       const res = await API.updateEmployee({ manv, trangthai: 1 });
       if (res.success) {
         showToast('Đã kích hoạt lại nhân viên', 'success');
-        loadEmployees(document.getElementById('emp-search').value.trim(), document.getElementById('emp-show-all')?.checked);
+        loadEmployees('', document.getElementById('emp-show-all')?.checked);
       } else {
         showToast(res.message || 'Thao tác thất bại', 'danger');
       }
@@ -3571,8 +3577,11 @@ function resetUncappedView() {
   document.getElementById('unc-stat-noalloc').textContent = '—';
   document.getElementById('unc-stat-done').textContent = '—';
   document.getElementById('unc-noalloc-badge').textContent = '0';
+  document.getElementById('unc-issued-total-badge').textContent = '0';
   document.getElementById('unc-noalloc-tbody').innerHTML = '';
+  document.getElementById('unc-issued-tbody').innerHTML = '';
   document.getElementById('unc-noalloc-empty').classList.add('d-none');
+  document.getElementById('unc-issued-empty').classList.add('d-none');
 }
 
 function initUncappedTab() {
@@ -3622,8 +3631,10 @@ async function loadUncapped() {
 
     // Đếm theo NV duy nhất để tránh overcount khi 1 NV có nhiều chứng từ trong tháng.
     const noAllocSet = new Set((data.no_allocate || []).map(r => String(r.manv || '')));
-    const noAlloc    = noAllocSet.size;
-    const done       = Math.max(0, (data.tong_nv || 0) - noAlloc);
+    const noAlloc    = Number.isFinite(parseInt(data.tong_no_allocate_nv, 10))
+      ? parseInt(data.tong_no_allocate_nv, 10)
+      : noAllocSet.size;
+    const done       = parseInt(data.tong_sl_da_cap, 10) || 0;
     document.getElementById('unc-stat-tong').textContent    = data.tong_nv || 0;
     document.getElementById('unc-stat-noalloc').textContent = noAlloc;
     document.getElementById('unc-stat-done').textContent    = done;
@@ -3651,8 +3662,36 @@ function renderUncapped(data) {
       `<td>${escHtml(r.tennhanvien || '')}</td>` +
       `<td>${escHtml(r.tenphongban || r.mapb || '')}</td>` +
       `<td><code>${escHtml(r.mact || '')}</code></td>` +
-      `<td>${escHtml(r.ngct || '')}</td></tr>`
+      `<td>${escHtml(r.ngct || '')}</td>` +
+      `<td class="text-end">` +
+      `<button class="btn btn-sm btn-outline-info" onclick="openEmpHistory('${escHtml(r.manv)}','${escHtml(r.tennhanvien || '')}')">` +
+      `<i class="bi bi-clock-history"></i> Lịch sử</button></td></tr>`
     ).join('');
+  }
+
+  const issuedTbody = document.getElementById('unc-issued-tbody');
+  const issuedEmpty = document.getElementById('unc-issued-empty');
+  const issuedList = data.issued_by_type || [];
+  const totalIssued = (data.tong_sl_da_cap != null)
+    ? data.tong_sl_da_cap
+    : issuedList.reduce((s, r) => s + (parseInt(r.tong_sl_cap, 10) || 0), 0);
+
+  document.getElementById('unc-issued-total-badge').textContent = totalIssued;
+
+  if (issuedList.length === 0) {
+    issuedTbody.innerHTML = '';
+    issuedEmpty.classList.remove('d-none');
+  } else {
+    issuedEmpty.classList.add('d-none');
+    issuedTbody.innerHTML = issuedList.map(r => `
+      <tr>
+        <td>${escHtml(r.tenvt || ('Mã ' + r.mavt))}</td>
+        <td>${escHtml(r.dvt || '—')}</td>
+        <td class="text-end fw-semibold text-success">${parseInt(r.tong_sl_cap, 10) || 0}</td>
+        <td class="text-end">${parseInt(r.so_nv, 10) || 0}</td>
+        <td class="text-end">${parseInt(r.so_ct, 10) || 0}</td>
+      </tr>
+    `).join('');
   }
 }
 
@@ -3663,6 +3702,12 @@ function exportUncappedCsv() {
   const rows  = [['Nhóm', 'Mã NV', 'Họ tên', 'Bộ phận', 'Mã CT', 'Ngày CT']];
   (uncData.no_allocate || []).forEach(r =>
     rows.push(['Có CT tới tháng chọn, chưa cấp phát', r.manv, r.tennhanvien || '', r.tenphongban || r.mapb || '', r.mact || '', r.ngct || '']));
+
+  rows.push([]);
+  rows.push(['Thống kê vật tư đã cấp', 'Mã VT', 'Tên vật tư', 'ĐVT', 'Tổng SL đã cấp', 'Số NV', 'Số CT']);
+  (uncData.issued_by_type || []).forEach(r =>
+    rows.push(['Đã cấp theo loại', r.mavt || '', r.tenvt || '', r.dvt || '', r.tong_sl_cap || 0, r.so_nv || 0, r.so_ct || 0]));
+
   const csv  = BOM + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
