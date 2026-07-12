@@ -3364,6 +3364,7 @@ function renderSchedule(data) {
   const group   = document.getElementById('sch-group').value;
   const content = document.getElementById('sch-content');
   const grouped = data.grouped || [];
+  const byType  = data.by_type || [];
 
   const urgencyBadge = (days) => {
     if (days <= 14) return '<span class="badge bg-danger">Gấp</span>';
@@ -3371,7 +3372,43 @@ function renderSchedule(data) {
     return '<span class="badge bg-success">Còn thời gian</span>';
   };
 
-  content.innerHTML = grouped.map(g => {
+  const byTypeHtml = `
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 text-warning"><i class="bi bi-box-seam me-2"></i>Thống kê chi tiết từng loại vật tư</h6>
+        <span class="badge bg-warning text-dark">${byType.length} loại</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Vật tư</th>
+              <th>ĐVT</th>
+              <th class="text-end">Tổng suất</th>
+              <th class="text-end">Số nhân viên</th>
+              <th class="text-end">Số chứng từ</th>
+              <th class="text-center">Ngày cấp gần nhất</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${byType.length === 0
+              ? `<tr><td colspan="6" class="text-center text-muted py-3">Không có dữ liệu chi tiết theo loại.</td></tr>`
+              : byType.map(r => `
+                <tr>
+                  <td>${escHtml(r.tenvt || ('Mã ' + r.mavt))}</td>
+                  <td>${escHtml(r.dvt || '—')}</td>
+                  <td class="text-end fw-semibold">${parseInt(r.tong_suat, 10) || 0}</td>
+                  <td class="text-end">${parseInt(r.so_nhan_vien, 10) || 0}</td>
+                  <td class="text-end">${parseInt(r.so_chung_tu, 10) || 0}</td>
+                  <td class="text-center">${formatDate(r.ngay_cap_gan_nhat)}</td>
+                </tr>
+              `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  content.innerHTML = byTypeHtml + grouped.map(g => {
     const icon = group === 'department' ? 'bi-building' :
                  group === 'month'      ? 'bi-calendar2' : 'bi-person';
 
@@ -3457,6 +3494,22 @@ function exportScheduleCsv() {
     [r.manv, esc(r.tennhanvien), r.mapb, esc(r.tenphongban||''), r.mavt, esc(r.tenvt), esc(r.dvt||''),
      esc(r.ngnhan), esc(r.ngnhantt), r.con_lai_ngay, esc(r.thang_cap)].join(',')
   )];
+
+  rows.push('');
+  rows.push(['Thống kê theo loại', 'Mã VT', 'Tên vật tư', 'ĐVT', 'Tổng suất', 'Số nhân viên', 'Số chứng từ', 'Ngày cấp gần nhất']
+    .map(c => esc(c)).join(','));
+  (schData.by_type || []).forEach(r => {
+    rows.push([
+      'Theo loại',
+      r.mavt || '',
+      r.tenvt || '',
+      r.dvt || '',
+      r.tong_suat || 0,
+      r.so_nhan_vien || 0,
+      r.so_chung_tu || 0,
+      r.ngay_cap_gan_nhat || ''
+    ].map(c => esc(c)).join(','));
+  });
   const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');

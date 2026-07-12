@@ -69,6 +69,36 @@ while ($r = mysqli_fetch_assoc($resDetail)) {
 }
 
 // ---------------------------------------------------------------
+// Thống kê chi tiết theo từng loại vật tư
+// ---------------------------------------------------------------
+$sqlByType = "SELECT
+        ct.mavt,
+        d.tenvt,
+        d.dvt,
+        COUNT(*) AS tong_suat,
+        COUNT(DISTINCT ctu.manv) AS so_nhan_vien,
+        COUNT(DISTINCT ctu.mact) AS so_chung_tu,
+        MIN(ct.ngnhantt) AS ngay_cap_gan_nhat
+    FROM bhld_ctctu ct
+    JOIN bhld_ctu ctu ON ctu.mact = ct.mact
+    JOIN bhld_nhanvien nv ON nv.manv = ctu.manv
+    JOIN bhld_dmvattu d ON d.mavt = ct.mavt
+    WHERE $where
+    GROUP BY ct.mavt, d.tenvt, d.dvt
+    ORDER BY tong_suat DESC, d.tenvt ASC";
+
+$resByType = mysqli_query($conn, $sqlByType);
+if (!$resByType) sendError('Lỗi truy vấn thống kê theo loại: ' . mysqli_error($conn), 500);
+
+$byType = [];
+while ($r = mysqli_fetch_assoc($resByType)) {
+    $r['tong_suat'] = intval($r['tong_suat']);
+    $r['so_nhan_vien'] = intval($r['so_nhan_vien']);
+    $r['so_chung_tu'] = intval($r['so_chung_tu']);
+    $byType[] = $r;
+}
+
+// ---------------------------------------------------------------
 // Nhóm dữ liệu theo yêu cầu
 // ---------------------------------------------------------------
 $grouped = [];
@@ -139,6 +169,7 @@ sendSuccess([
     'tong_loai_vt'  => $tongLoaiVT,
     'tong_suat_cap' => $tongSuatCap,
     'phong_ban_list'=> $phongBanList,
+    'by_type'       => $byType,
     'grouped'       => array_values($grouped),
     'detail'        => $rows,
 ], "Báo cáo lịch cấp phát $months tháng tới");
