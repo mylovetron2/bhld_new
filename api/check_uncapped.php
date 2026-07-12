@@ -130,6 +130,44 @@ foreach ($issuedByType as $it) {
     $tongSlDaCap += intval($it['tong_sl_cap']);
 }
 
+// ---------------------------------------------------------------
+// Thống kê vật tư chưa cấp (sl = 0) theo loại tới tháng chọn.
+// Dùng ct.ngct để bám phạm vi "tới tháng chọn" của tab chưa cấp phát.
+// ---------------------------------------------------------------
+$sqlUnissuedByType = "SELECT
+        ctd.mavt,
+        COALESCE(vt.tenvt, CONCAT('Mã ', ctd.mavt)) AS tenvt,
+        COALESCE(vt.dvt, '') AS dvt,
+        COUNT(*) AS so_dong_chua_cap,
+        COUNT(DISTINCT ct.manv) AS so_nv,
+        COUNT(DISTINCT ct.mact) AS so_ct
+    FROM bhld_ctu ct
+    JOIN (
+        SELECT mact
+        FROM bhld_ctctu
+        GROUP BY mact
+        HAVING SUM(CASE WHEN sl > 0 THEN 1 ELSE 0 END) = 0
+    ) ct_noalloc ON ct_noalloc.mact = ct.mact
+    JOIN bhld_ctctu ctd ON ctd.mact = ct.mact
+    JOIN bhld_nhanvien nv ON nv.manv = ct.manv
+    LEFT JOIN bhld_dmvattu vt ON vt.mavt = ctd.mavt
+    WHERE ct.ngct <= '$toDate'
+            AND (ctd.sl = 0 OR ctd.sl IS NULL)
+      AND $empFilter
+      $pbFilterStr
+    GROUP BY ctd.mavt, vt.tenvt, vt.dvt
+    ORDER BY so_dong_chua_cap DESC, tenvt ASC";
+
+$unissuedByType = [];
+$rUnissued = mysqli_query($conn, $sqlUnissuedByType);
+if (!$rUnissued) sendError('Lỗi truy vấn thống kê chưa cấp: ' . mysqli_error($conn), 500);
+while ($r = mysqli_fetch_assoc($rUnissued)) {
+    $r['so_dong_chua_cap'] = intval($r['so_dong_chua_cap']);
+    $r['so_nv'] = intval($r['so_nv']);
+    $r['so_ct'] = intval($r['so_ct']);
+    $unissuedByType[] = $r;
+}
+
 // Danh sách phòng ban
 $resPb  = mysqli_query($conn, "SELECT mapb, tenphong FROM bhld_phongban ORDER BY mapb");
 $pbList = [];
@@ -152,6 +190,7 @@ sendSuccess([
     'tong_sl_da_cap'   => $tongSlDaCap,
     'no_allocate'      => $noAllocateList,
     'issued_by_type'   => $issuedByType,
+    'unissued_by_type' => $unissuedByType,
     'phong_ban_list'   => $pbList,
 ], "Kiểm tra cấp phát đến tháng $monthParam");
 

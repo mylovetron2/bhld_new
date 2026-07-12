@@ -3578,10 +3578,16 @@ function resetUncappedView() {
   document.getElementById('unc-stat-done').textContent = '—';
   document.getElementById('unc-noalloc-badge').textContent = '0';
   document.getElementById('unc-issued-total-badge').textContent = '0';
+  const unissuedBadge = document.getElementById('unc-unissued-total-badge');
+  if (unissuedBadge) unissuedBadge.textContent = '0';
   document.getElementById('unc-noalloc-tbody').innerHTML = '';
   document.getElementById('unc-issued-tbody').innerHTML = '';
+  const unissuedTbody = document.getElementById('unc-unissued-tbody');
+  if (unissuedTbody) unissuedTbody.innerHTML = '';
   document.getElementById('unc-noalloc-empty').classList.add('d-none');
   document.getElementById('unc-issued-empty').classList.add('d-none');
+  const unissuedEmpty = document.getElementById('unc-unissued-empty');
+  if (unissuedEmpty) unissuedEmpty.classList.add('d-none');
 }
 
 function initUncappedTab() {
@@ -3693,6 +3699,31 @@ function renderUncapped(data) {
       </tr>
     `).join('');
   }
+
+  const unissuedTbody = document.getElementById('unc-unissued-tbody');
+  const unissuedEmpty = document.getElementById('unc-unissued-empty');
+  const unissuedBadge = document.getElementById('unc-unissued-total-badge');
+  if (!unissuedTbody || !unissuedEmpty || !unissuedBadge) return;
+  const unissuedList = data.unissued_by_type || [];
+  const totalUnissued = unissuedList.reduce((s, r) => s + (parseInt(r.so_dong_chua_cap, 10) || 0), 0);
+
+  unissuedBadge.textContent = totalUnissued;
+
+  if (unissuedList.length === 0) {
+    unissuedTbody.innerHTML = '';
+    unissuedEmpty.classList.remove('d-none');
+  } else {
+    unissuedEmpty.classList.add('d-none');
+    unissuedTbody.innerHTML = unissuedList.map(r => `
+      <tr>
+        <td>${escHtml(r.tenvt || ('Mã ' + r.mavt))}</td>
+        <td>${escHtml(r.dvt || '—')}</td>
+        <td class="text-end fw-semibold text-danger">${parseInt(r.so_dong_chua_cap, 10) || 0}</td>
+        <td class="text-end">${parseInt(r.so_nv, 10) || 0}</td>
+        <td class="text-end">${parseInt(r.so_ct, 10) || 0}</td>
+      </tr>
+    `).join('');
+  }
 }
 
 function exportUncappedCsv() {
@@ -3707,6 +3738,11 @@ function exportUncappedCsv() {
   rows.push(['Thống kê vật tư đã cấp', 'Mã VT', 'Tên vật tư', 'ĐVT', 'Tổng SL đã cấp', 'Số NV', 'Số CT']);
   (uncData.issued_by_type || []).forEach(r =>
     rows.push(['Đã cấp theo loại', r.mavt || '', r.tenvt || '', r.dvt || '', r.tong_sl_cap || 0, r.so_nv || 0, r.so_ct || 0]));
+
+  rows.push([]);
+  rows.push(['Thống kê vật tư chưa cấp', 'Mã VT', 'Tên vật tư', 'ĐVT', 'Số dòng chưa cấp', 'Số NV', 'Số CT']);
+  (uncData.unissued_by_type || []).forEach(r =>
+    rows.push(['Chưa cấp theo loại', r.mavt || '', r.tenvt || '', r.dvt || '', r.so_dong_chua_cap || 0, r.so_nv || 0, r.so_ct || 0]));
 
   const csv  = BOM + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
