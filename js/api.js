@@ -295,7 +295,10 @@ const API = {
     const res = await fetch(`${API_BASE}/database_backup.php`, {
       method: 'GET',
       credentials: 'include',
-      headers: { 'Accept': 'application/sql,application/octet-stream,*/*' },
+      headers: {
+        'Accept': 'application/sql,application/octet-stream,*/*',
+        'X-BHLD-KEY': API_KEY,
+      },
     });
 
     if (!res.ok) {
@@ -304,7 +307,15 @@ const API = {
         const j = await res.json();
         if (j && j.message) msg = j.message;
       } catch (_) {
-        // Ignore non-json error body.
+        try {
+          const bodyText = await res.text();
+          const compactText = bodyText.replace(/\s+/g, ' ').trim();
+          if (compactText) {
+            msg = `${msg} - ${compactText.slice(0, 180)}`;
+          }
+        } catch (_) {
+          // Ignore unreadable error body.
+        }
       }
       throw new Error(msg);
     }
@@ -335,7 +346,10 @@ const API = {
       method: 'POST',
       body: form,
       credentials: 'include',
-      headers: { 'Accept': 'application/json' },
+      headers: {
+        'Accept': 'application/json',
+        'X-BHLD-KEY': API_KEY,
+      },
     });
 
     const data = await res.json().catch(() => null);

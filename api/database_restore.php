@@ -14,14 +14,15 @@ if (!isset($_FILES['sql_file']) || $_FILES['sql_file']['error'] !== UPLOAD_ERR_O
 }
 
 $file = $_FILES['sql_file'];
-$originalName = $file['name'] ?? 'backup.sql';
+$originalName = isset($file['name']) ? $file['name'] : 'backup.sql';
 $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
 if ($ext !== 'sql') {
     sendError('Chỉ chấp nhận file .sql', 400);
 }
 
 $maxSize = 30 * 1024 * 1024;
-if (($file['size'] ?? 0) <= 0 || ($file['size'] ?? 0) > $maxSize) {
+$fileSize = isset($file['size']) ? (int)$file['size'] : 0;
+if ($fileSize <= 0 || $fileSize > $maxSize) {
     sendError('File SQL không hợp lệ hoặc vượt quá 30MB', 400);
 }
 
@@ -73,7 +74,7 @@ try {
 
     sendSuccess([
         'file' => $originalName,
-        'size' => (int)$file['size'],
+        'size' => $fileSize,
         'restored_at' => date('Y-m-d H:i:s'),
     ], 'Khôi phục database thành công');
 } catch (Exception $e) {
