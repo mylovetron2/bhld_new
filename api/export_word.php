@@ -33,6 +33,14 @@ function pick_sum_expr($conn, $candidates, $alias) {
     return "0 as $alias";
 }
 
+function column_exists($conn, $tableName, $columnName) {
+    $table = mysqli_real_escape_string($conn, $tableName);
+    $column = mysqli_real_escape_string($conn, $columnName);
+    $sql = "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$table' AND column_name = '$column' LIMIT 1";
+    $rs = mysqli_query($conn, $sql);
+    return $rs && mysqli_num_rows($rs) > 0;
+}
+
 function extract_chuc_danh($ghiChu) {
     $s = trim((string)$ghiChu);
     if ($s === '') return '';
@@ -114,6 +122,13 @@ $exprNutTai = pick_sum_expr($conn, ['NutTai'], 'NutTai');
 $exprGangTayHan = pick_sum_expr($conn, ['GangTayHan', 'GangTayDaThoHan'], 'GangTayHan');
 
 $escEnd = mysqli_real_escape_string($conn, $endDate);
+$employeeStatusJoin = '';
+$employeeStatusWhere = '';
+if (column_exists($conn, 'bhld_nhanvien', 'trangthai')) {
+    $employeeStatusJoin = "LEFT JOIN bhld_nhanvien nv ON nv.manv = v.manv";
+    $employeeStatusWhere = "AND COALESCE(nv.trangthai, 1) = 1";
+}
+
 $sql = "
     SELECT 
         v.mapb,
@@ -139,7 +154,9 @@ $sql = "
     FROM bhld_view_chungtu_chuanhan_final v
     LEFT JOIN bhld_phongban pb ON pb.mapb = v.mapb
     LEFT JOIN bhld_nhanvien_hoso hs ON hs.manv = v.manv
+    $employeeStatusJoin
     WHERE v.ngct <= '$escEnd'
+    $employeeStatusWhere
     GROUP BY v.mapb, v.manv
     ORDER BY v.mapb, v.tennhanvien, v.manv
 ";

@@ -28,6 +28,14 @@ function pick_sum_expr($conn, $candidates, $alias) {
     return "0 as $alias";
 }
 
+function column_exists($conn, $tableName, $columnName) {
+    $table = mysqli_real_escape_string($conn, $tableName);
+    $column = mysqli_real_escape_string($conn, $columnName);
+    $sql = "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$table' AND column_name = '$column' LIMIT 1";
+    $rs = mysqli_query($conn, $sql);
+    return $rs && mysqli_num_rows($rs) > 0;
+}
+
 // ===== PARSE THAM SỐ THÁNG =====
 $month_param = isset($_GET['month']) ? trim($_GET['month']) : date('m/Y');
 $parts = preg_split('/[\/\-]/', $month_param);
@@ -47,6 +55,10 @@ $showngayin = "$monthNum/$year";
 
 // ===== BUILD DATA =====
 $escEnd = mysqli_real_escape_string($conn, $endDate);
+$employeeStatusFilter = '';
+if (column_exists($conn, 'bhld_nhanvien', 'trangthai')) {
+    $employeeStatusFilter = "AND EXISTS (SELECT 1 FROM bhld_nhanvien nv WHERE nv.manv = vw.manv AND COALESCE(nv.trangthai, 1) = 1)";
+}
 $data   = [];
 
 $sqlPB = "SELECT * FROM bhld_phongban ORDER BY mapb ASC";
@@ -75,8 +87,9 @@ if ($resPB) {
                        $exprPhinLoc, $exprGangTay,
                        $exprKhauTrang, $exprAoPhao,
                        $exprGangTayHan
-                FROM bhld_view_chungtu_chuanhan_final
+                FROM bhld_view_chungtu_chuanhan_final vw
                 WHERE mapb='$pb' AND ngct <= '$escEnd'
+                $employeeStatusFilter
                 GROUP BY manv";
 
         $res = mysqli_query($conn, $sql);

@@ -10,10 +10,10 @@
 // Thay đổi các thông số sau cho phù hợp với server
 $db_config = [
     //'host'     => 'localhost', // Thay 'localhost' bằng 'diavatly.com' nếu database nằm trên server diavatly.com
-    'host'     => 'diavatly.com',
-    'username' => 'diavatly_ltd',
+    'host'     => 'localhost',
+    'username' => 'mapselli676e_ltd',
     'password' => '12345678',
-    'database' => 'diavatly_ltd',
+    'database' => 'mapselli676e_ltd',
     'port'     => 3306,
     'charset'  => 'utf8mb4',
 ];
