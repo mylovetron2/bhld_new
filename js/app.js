@@ -3372,19 +3372,30 @@ function renderSchedule(data) {
     return '<span class="badge bg-success">Còn thời gian</span>';
   };
 
+  const detailText = (r) => [
+    r.size_label ? `Size: ${r.size_label}` : '',
+    r.mau_label ? `Màu: ${r.mau_label}` : '',
+    r.loai_label ? `Loại: ${r.loai_label}` : '',
+    r.quycach_label ? `Quy cách: ${r.quycach_label}` : ''
+  ].filter(Boolean).join(' | ') || '—';
+
   const byTypeHtml = `
     <div class="card shadow-sm mb-3">
       <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0 text-warning"><i class="bi bi-box-seam me-2"></i>Thống kê chi tiết từng loại vật tư</h6>
-        <span class="badge bg-warning text-dark">${byType.length} loại</span>
+        <h6 class="mb-0 text-warning"><i class="bi bi-box-seam me-2"></i>Tổng kết vật tư ${data.months || 3} tháng tiếp theo</h6>
+        <span class="badge bg-warning text-dark">${byType.length} biến thể</span>
       </div>
       <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
           <thead class="table-light">
             <tr>
               <th>Vật tư</th>
+              <th>Size</th>
+              <th>Màu</th>
+              <th>Loại</th>
+              <th>Quy cách</th>
               <th>ĐVT</th>
-              <th class="text-end">Tổng suất</th>
+              <th class="text-end">Tổng số lượng</th>
               <th class="text-end">Số nhân viên</th>
               <th class="text-end">Số chứng từ</th>
               <th class="text-center">Ngày cấp gần nhất</th>
@@ -3392,10 +3403,14 @@ function renderSchedule(data) {
           </thead>
           <tbody>
             ${byType.length === 0
-              ? `<tr><td colspan="6" class="text-center text-muted py-3">Không có dữ liệu chi tiết theo loại.</td></tr>`
+              ? `<tr><td colspan="10" class="text-center text-muted py-3">Không có dữ liệu chi tiết theo loại.</td></tr>`
               : byType.map(r => `
                 <tr>
                   <td>${escHtml(r.tenvt || ('Mã ' + r.mavt))}</td>
+                  <td>${escHtml(r.size_label || '—')}</td>
+                  <td>${escHtml(r.mau_label || '—')}</td>
+                  <td>${escHtml(r.loai_label || '—')}</td>
+                  <td>${escHtml(r.quycach_label || '—')}</td>
                   <td>${escHtml(r.dvt || '—')}</td>
                   <td class="text-end fw-semibold">${parseInt(r.tong_suat, 10) || 0}</td>
                   <td class="text-end">${parseInt(r.so_nhan_vien, 10) || 0}</td>
@@ -3422,6 +3437,8 @@ function renderSchedule(data) {
       tableBody = g.items.map(r => `
         <tr>
           <td class="small">${escHtml(r.tenvt)}</td>
+          <td class="small">${escHtml(detailText(r))}</td>
+          <td class="text-end small fw-semibold">${parseInt(r.so_luong_can_cap, 10) || 1}</td>
           <td class="text-center small text-muted">${escHtml(r.dvt || '')}</td>
           <td class="text-center small">${formatDate(r.ngnhan)}</td>
           <td class="text-center small fw-semibold">${formatDate(r.ngnhantt)}</td>
@@ -3437,7 +3454,7 @@ function renderSchedule(data) {
       });
       tableBody = Object.values(byNv).map(nv => `
         <tr class="table-light">
-          <td colspan="6" class="fw-semibold small py-1 ps-3">
+          <td colspan="8" class="fw-semibold small py-1 ps-3">
             <i class="bi bi-person me-1 text-muted"></i>${escHtml(nv.tennhanvien)}
             <span class="text-muted fw-normal">[${escHtml(nv.manv)}]</span>
             ${group === 'month' ? `<span class="ms-2 badge bg-secondary bg-opacity-50 text-dark">${escHtml(nv.tenphongban || nv.mapb || '')}</span>` : ''}
@@ -3446,6 +3463,8 @@ function renderSchedule(data) {
         ${nv.items.map(r => `
         <tr>
           <td class="small ps-4">${escHtml(r.tenvt)}</td>
+          <td class="small">${escHtml(detailText(r))}</td>
+          <td class="text-end small fw-semibold">${parseInt(r.so_luong_can_cap, 10) || 1}</td>
           <td class="text-center small text-muted">${escHtml(r.dvt || '')}</td>
           <td class="text-center small">${formatDate(r.ngnhan)}</td>
           <td class="text-center small fw-semibold">${formatDate(r.ngnhantt)}</td>
@@ -3461,13 +3480,15 @@ function renderSchedule(data) {
             <i class="bi ${icon} me-2 text-primary"></i>
             <span class="fw-semibold">${escHtml(g.label)}</span>${subHeader}
           </div>
-          <span class="badge bg-primary rounded-pill">${g.tong} suất</span>
+          <span class="badge bg-primary rounded-pill">${g.tong} bộ</span>
         </div>
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0">
             <thead class="table-light border-top-0">
               <tr>
                 <th>Vật tư</th>
+                <th>Chi tiết</th>
+                <th class="text-end" style="width:80px">Số lượng</th>
                 <th class="text-center" style="width:60px">ĐVT</th>
                 <th class="text-center" style="width:110px">Ngày nhận</th>
                 <th class="text-center" style="width:120px">Ngày cấp tiếp</th>
@@ -3489,20 +3510,25 @@ function exportScheduleCsv() {
   }
   const months = document.getElementById('sch-months').value;
   const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const header = ['Mã NV','Tên nhân viên','Mã BP','Tên bộ phận','Mã VT','Tên vật tư','ĐVT','Ngày nhận','Ngày cấp tiếp','Còn lại (ngày)','Tháng cấp'];
+  const header = ['Mã NV','Tên nhân viên','Mã BP','Tên bộ phận','Mã VT','Tên vật tư','Size','Màu','Loại','Quy cách','Số lượng','ĐVT','Ngày nhận','Ngày cấp tiếp','Còn lại (ngày)','Tháng cấp'];
   const rows = [header.join(','), ...schData.detail.map(r =>
-    [r.manv, esc(r.tennhanvien), r.mapb, esc(r.tenphongban||''), r.mavt, esc(r.tenvt), esc(r.dvt||''),
+    [r.manv, esc(r.tennhanvien), r.mapb, esc(r.tenphongban||''), r.mavt, esc(r.tenvt), esc(r.size_label||''),
+     esc(r.mau_label||''), esc(r.loai_label||''), esc(r.quycach_label||''), r.so_luong_can_cap || 1, esc(r.dvt||''),
      esc(r.ngnhan), esc(r.ngnhantt), r.con_lai_ngay, esc(r.thang_cap)].join(',')
   )];
 
   rows.push('');
-  rows.push(['Thống kê theo loại', 'Mã VT', 'Tên vật tư', 'ĐVT', 'Tổng suất', 'Số nhân viên', 'Số chứng từ', 'Ngày cấp gần nhất']
+  rows.push(['Thống kê theo loại', 'Mã VT', 'Tên vật tư', 'Size', 'Màu', 'Loại', 'Quy cách', 'ĐVT', 'Tổng số lượng', 'Số nhân viên', 'Số chứng từ', 'Ngày cấp gần nhất']
     .map(c => esc(c)).join(','));
   (schData.by_type || []).forEach(r => {
     rows.push([
       'Theo loại',
       r.mavt || '',
       r.tenvt || '',
+      r.size_label || '',
+      r.mau_label || '',
+      r.loai_label || '',
+      r.quycach_label || '',
       r.dvt || '',
       r.tong_suat || 0,
       r.so_nhan_vien || 0,
