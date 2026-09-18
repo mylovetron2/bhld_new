@@ -1361,20 +1361,39 @@
         </div>
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label">Giày size</label>
-            <input type="text" class="form-control" id="emp-giay-size" placeholder="VD: 41, 42" />
+            <label class="form-label">Giày size <span class="text-danger" title="Bắt buộc khi thêm nhân viên">*</span></label>
+            <input type="number" class="form-control" id="emp-giay-size" min="1" max="70" step="1" placeholder="VD: 41" required />
           </div>
           <div class="col-md-6">
-            <label class="form-label">Giày loại</label>
-            <input type="text" class="form-control" id="emp-giay-loai" placeholder="VD: Da, thể thao" />
+            <label class="form-label">Giày loại <span class="text-danger" title="Bắt buộc khi thêm nhân viên">*</span></label>
+            <div class="input-group">
+              <select class="form-select" id="emp-giay-loai" required>
+                <option value="">-- Chọn loại giày --</option>
+                <option value="Da">Da</option>
+                <option value="Thể thao">Thể thao</option>
+                <option value="Cao cổ">Cao cổ</option>
+                <option value="Thấp cổ">Thấp cổ</option>
+              </select>
+              <button class="btn btn-outline-primary" type="button" id="emp-add-shoe-type-btn" title="Thêm loại giày">+</button>
+            </div>
           </div>
           <div class="col-md-6">
-            <label class="form-label">Quần áo size</label>
-            <input type="text" class="form-control" id="emp-quanao-size" placeholder="VD: M, L, XL" />
+            <label class="form-label">Quần áo size <span class="text-danger" title="Bắt buộc khi thêm nhân viên">*</span></label>
+            <input type="number" class="form-control" id="emp-quanao-size" min="1" max="20" step="1" placeholder="VD: 3" required />
           </div>
           <div class="col-md-6">
-            <label class="form-label">Mũ màu</label>
-            <input type="text" class="form-control" id="emp-mu-mau" placeholder="VD: Vàng, trắng" />
+            <label class="form-label">Mũ màu <span class="text-danger" title="Bắt buộc khi thêm nhân viên">*</span></label>
+            <div class="input-group">
+              <select class="form-select" id="emp-mu-mau" required>
+                <option value="">-- Chọn màu mũ --</option>
+                <option value="Trắng">Trắng</option>
+                <option value="Vàng">Vàng</option>
+                <option value="Xanh">Xanh</option>
+                <option value="Đỏ">Đỏ</option>
+                <option value="Cam">Cam</option>
+              </select>
+              <button class="btn btn-outline-primary" type="button" id="emp-add-helmet-color-btn" title="Thêm màu mũ">+</button>
+            </div>
           </div>
           <div class="col-12">
             <label class="form-label">Ghi chú hồ sơ</label>

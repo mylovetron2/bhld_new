@@ -129,6 +129,26 @@ try {
         $dinhmuc    = isset($input['dinhmuc']) ? mysqli_real_escape_string($conn, trim($input['dinhmuc'])) : null;
         $hasProfile = tableExists($conn, 'bhld_nhanvien_hoso');
 
+        if (!$hasProfile) {
+            sendError('Thiếu bảng hồ sơ nhân viên bhld_nhanvien_hoso', 500);
+        }
+
+        $requiredProfile = [
+            'giay_size' => 'Size giày',
+            'giay_loai' => 'Loại giày',
+            'quanao_size' => 'Size quần áo',
+            'mu_mau' => 'Màu mũ',
+        ];
+        $missingProfile = [];
+        foreach ($requiredProfile as $field => $label) {
+            if (!isset($input[$field]) || trim((string)$input[$field]) === '') {
+                $missingProfile[] = $label;
+            }
+        }
+        if (!empty($missingProfile)) {
+            sendError('Thiếu thông tin hồ sơ: ' . implode(', ', $missingProfile), 400);
+        }
+
         // Check duplicate manv
         $check = mysqli_query($conn, "SELECT manv FROM bhld_nhanvien WHERE manv = '$manv' LIMIT 1");
         if ($check && mysqli_num_rows($check) > 0) {
@@ -140,14 +160,14 @@ try {
                 VALUES ('$manv', '$tennhanvien', '$mapb', $dinhmucSql)";
 
         if (mysqli_query($conn, $sql)) {
-            if ($hasProfile) {
-                $profileParts = buildProfileUpdateSql($conn, $input);
-                if ($profileParts['has_fields']) {
-                    $cols = implode(', ', array_merge(['manv'], $profileParts['columns']));
-                    $vals = implode(', ', array_merge(["'$manv'"], $profileParts['values']));
-                    $ups = implode(', ', $profileParts['updates']);
-                    $profileSql = "INSERT INTO bhld_nhanvien_hoso ($cols) VALUES ($vals) ON DUPLICATE KEY UPDATE $ups";
-                    mysqli_query($conn, $profileSql);
+            $profileParts = buildProfileUpdateSql($conn, $input);
+            if ($profileParts['has_fields']) {
+                $cols = implode(', ', array_merge(['manv'], $profileParts['columns']));
+                $vals = implode(', ', array_merge(["'$manv'"], $profileParts['values']));
+                $ups = implode(', ', $profileParts['updates']);
+                $profileSql = "INSERT INTO bhld_nhanvien_hoso ($cols) VALUES ($vals) ON DUPLICATE KEY UPDATE $ups";
+                if (!mysqli_query($conn, $profileSql)) {
+                    sendError('Lỗi lưu hồ sơ: ' . mysqli_error($conn), 500);
                 }
             }
 

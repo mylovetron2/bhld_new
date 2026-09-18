@@ -938,6 +938,8 @@ async function initEmployeesTab() {
     document.getElementById('emp-save-btn').addEventListener('click', saveEmployee);
     document.getElementById('emp-policy-add-row-btn').addEventListener('click', () => addEmpPolicyRow());
     document.getElementById('emp-policy-from-dm-btn').addEventListener('click', applyPolicyFromCurrentDinhMuc);
+    document.getElementById('emp-add-shoe-type-btn').addEventListener('click', () => addProfileOption('emp-giay-loai', 'loại giày'));
+    document.getElementById('emp-add-helmet-color-btn').addEventListener('click', () => addProfileOption('emp-mu-mau', 'màu mũ'));
     // Restore các field bị ẩn khi modal đóng
     document.getElementById('empModal').addEventListener('hidden.bs.modal', () => {
       ['emp-manv-input','emp-ten-input','emp-mapb-input'].forEach(id => {
@@ -954,10 +956,26 @@ async function initEmployeesTab() {
 
 function setEmpProfileInputs(emp) {
   document.getElementById('emp-giay-size').value = emp?.giay_size || '';
-  document.getElementById('emp-giay-loai').value = emp?.giay_loai || '';
+  setProfileSelectValue('emp-giay-loai', emp?.giay_loai || '');
   document.getElementById('emp-quanao-size').value = emp?.quanao_size || '';
-  document.getElementById('emp-mu-mau').value = emp?.mu_mau || '';
+  setProfileSelectValue('emp-mu-mau', emp?.mu_mau || '');
   document.getElementById('emp-hoso-ghichu').value = emp?.hoso_ghichu || emp?.ghi_chu || '';
+}
+
+function setProfileSelectValue(id, value) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const normalized = String(value || '').trim();
+  if (normalized && !Array.from(select.options).some(option => option.value === normalized)) {
+    select.add(new Option(normalized, normalized));
+  }
+  select.value = normalized;
+}
+
+function addProfileOption(id, label) {
+  const value = window.prompt(`Nhập ${label} mới:`)?.trim();
+  if (!value) return;
+  setProfileSelectValue(id, value);
 }
 
 function getEmpProfilePayload() {
@@ -1613,6 +1631,19 @@ async function saveEmployee() {
   if (!manv || !tennhanvien || !mapb) {
     showToast('Vui lòng điền Mã NV, Tên và Mã PB', 'warning');
     return;
+  }
+
+  if (!emp) {
+    const missingProfile = [
+      ['giay_size', 'Size giày'],
+      ['giay_loai', 'Loại giày'],
+      ['quanao_size', 'Size quần áo'],
+      ['mu_mau', 'Màu mũ'],
+    ].filter(([field]) => !profilePayload[field]).map(([, label]) => label);
+    if (missingProfile.length > 0) {
+      showToast('Vui lòng nhập: ' + missingProfile.join(', '), 'warning');
+      return;
+    }
   }
 
   const origText = btn.innerHTML;
@@ -3498,17 +3529,39 @@ function exportScheduleExcel() {
     return;
   }
   const months = document.getElementById('sch-months').value;
+  const formatReportDate = (value) => {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '');
+  };
+  const reportStart = new Date(`${schData.from_date || new Date().toISOString().slice(0, 10)}T00:00:00`);
+  const reportMonths = Array.from({ length: parseInt(months, 10) || 0 }, (_, index) => {
+    const monthDate = new Date(reportStart.getFullYear(), reportStart.getMonth() + index, 1);
+    return String(monthDate.getMonth() + 1).padStart(2, '0');
+  }).join(', ');
   const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const attributeValue = (row, field) => schData.attribute_rules_ready
     ? (row[field] || '')
     : '';
   const detailHeaders = ['Mã NV','Tên nhân viên','Mã BP','Tên bộ phận','Mã VT','Tên vật tư','Size','Màu','Loại','Số lượng','ĐVT','Ngày nhận','Ngày cấp tiếp','Còn lại (ngày)','Tháng cấp'];
   const detailRows = schData.detail.map(r => [
-    r.manv, r.tennhanvien, r.mapb, r.tenphongban || '', r.mavt, r.tenvt,
+    r.manv, { value: r.tennhanvien, missing: (
+      schData.attribute_rules_ready && (
+        (Number(r.cho_phep_size) === 1 && !r.size_label) ||
+        (Number(r.cho_phep_mau) === 1 && !r.mau_label) ||
+        (Number(r.cho_phep_loai) === 1 && !r.loai_label)
+      )
+    ) }, r.mapb, r.tenphongban || '', r.mavt, r.tenvt,
     attributeValue(r, 'size_label'), attributeValue(r, 'mau_label'),
     attributeValue(r, 'loai_label'), r.so_luong_can_cap || 1, r.dvt || '', r.ngnhan, r.ngnhantt,
     r.con_lai_ngay, r.thang_cap
   ]);
+  const detailRowsByMonth = {};
+  schData.detail.forEach((row, index) => {
+    const monthKey = String(row.thang_cap || '').match(/(\d{1,2})[\/-](\d{4})/);
+    const month = monthKey ? String(parseInt(monthKey[1], 10)).padStart(2, '0') : 'Khác';
+    if (!detailRowsByMonth[month]) detailRowsByMonth[month] = [];
+    detailRowsByMonth[month].push(detailRows[index]);
+  });
   const summaryHeaders = ['Mã VT','Tên vật tư','Size','Màu','Loại','ĐVT','Tổng số lượng','Số nhân viên','Số chứng từ'];
   const summaryRows = (schData.by_type || []).map(r => [
     r.mavt, r.tenvt, attributeValue(r, 'size_label'), attributeValue(r, 'mau_label'),
@@ -3523,7 +3576,11 @@ function exportScheduleExcel() {
     const centered = new Set(options.centered || []);
     const colgroup = `<colgroup>${headers.map((_, index) => widths[index] ? `<col style="width:${widths[index]};">` : '<col>').join('')}</colgroup>`;
     const headerHtml = headers.map((h, index) => `<th style="${centered.has(index) ? 'text-align:center;' : ''}${widths[index] ? `width:${widths[index]};` : ''}">${esc(h)}</th>`).join('');
-    const rowsHtml = rows.map(row => `<tr>${row.map((v, index) => `<td style="${centered.has(index) ? 'text-align:center;' : ''}${widths[index] ? `width:${widths[index]};` : ''}">${esc(v)}</td>`).join('')}</tr>`).join('');
+    const rowsHtml = rows.map(row => `<tr>${row.map((v, index) => {
+      const cell = v && typeof v === 'object' ? v : { value: v, missing: false };
+      const missingStyle = cell.missing ? 'color:#b42318;font-weight:bold;' : '';
+      return `<td style="${missingStyle}${centered.has(index) ? 'text-align:center;' : ''}${widths[index] ? `width:${widths[index]};` : ''}">${esc(cell.value)}</td>`;
+    }).join('')}</tr>`).join('');
     return `<table class="${className}">${colgroup}<caption>${esc(title)}</caption><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
   };
   const summaryOptions = {
@@ -3534,13 +3591,17 @@ function exportScheduleExcel() {
     widths: ['12ch', '24ch', '10ch', '26ch', '10ch', '28ch', '10ch', '7ch', '14ch', '12ch', '10ch', '12ch', '14ch', '14ch', '12ch'],
     centered: [6, 7, 8]
   };
+  const detailTables = Object.keys(detailRowsByMonth)
+    .sort((a, b) => (a === 'Khác' ? 1 : b === 'Khác' ? -1 : Number(a) - Number(b)))
+    .map(month => table(month === 'Khác' ? 'Chi tiết cấp phát - Chưa xác định tháng' : `Chi tiết cấp phát - Tháng ${month}`, detailHeaders, detailRowsByMonth[month], 'detail', detailOptions))
+    .join('<table class="section-gap-table"><tbody><tr><td>&nbsp;</td></tr><tr><td>&nbsp;</td></tr></tbody></table>');
   const workbook = `<!doctype html><html><head><meta charset="utf-8"><style>
     body{font-family:Calibri,Arial,sans-serif;color:#17212b}h1{color:#0d416c;background:#dceef8;padding:10px 12px;border-left:6px solid #1769aa}.report-meta{padding:8px 10px;background:#f1f7fa;border:1px solid #b9cbd5;color:#365366}table{border-collapse:collapse;margin:14px 0 28px;width:100%}table.summary{margin-bottom:0}caption{text-align:left;font-size:17px;font-weight:bold;color:#fff;background:#1769aa;padding:9px 10px}th{background:#dceef8;color:#0d416c;font-weight:bold}th,td{border:1px solid #b9cbd5;padding:6px 8px;vertical-align:top;white-space:nowrap}tr:nth-child(even){background:#f5f9fb}.section-gap-table{border-collapse:collapse;margin:0;width:100%}.section-gap-table td{height:1em;border:0;padding:0}</style></head><body>
-    <h1>Báo cáo lịch cấp phát - ${esc(months)} tháng tiếp theo</h1>
-    <div class="report-meta"><strong>Từ ngày:</strong> ${esc(schData.from_date || '')} &nbsp; | &nbsp; <strong>Đến ngày:</strong> ${esc(schData.to_date || '')}</div>
+    <h1>Báo cáo lịch cấp phát - ${esc(months)} tháng tiếp theo (${esc(reportMonths)})</h1>
+    <div class="report-meta"><strong>Từ ngày:</strong> ${esc(formatReportDate(schData.from_date))} &nbsp; | &nbsp; <strong>Đến ngày:</strong> ${esc(formatReportDate(schData.to_date))}</div>
     ${table('Tổng hợp theo vật tư', summaryHeaders, summaryRows, 'summary', summaryOptions)}
     <table class="section-gap-table"><tbody><tr><td>&nbsp;</td></tr><tr><td>&nbsp;</td></tr></tbody></table>
-    ${table('Chi tiết cấp phát', detailHeaders, detailRows, 'detail', detailOptions)}
+    ${detailTables}
   </body></html>`;
   const blob = new Blob(['\uFEFF' + workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);

@@ -21,8 +21,10 @@ $mapb    = isset($_GET['mapb'])   ? mysqli_real_escape_string($conn, trim($_GET[
 $manv    = isset($_GET['manv'])   ? mysqli_real_escape_string($conn, trim($_GET['manv']))   : '';
 $group   = isset($_GET['group'])  ? trim($_GET['group'])  : 'employee';
 
-$today    = date('Y-m-d');
-$deadline = date('Y-m-d', strtotime("+$months months"));
+$today = date('Y-m-d');
+// "N tháng tiếp theo" là các tháng lịch sau tháng hiện tại.
+$fromDate = date('Y-m-01', strtotime('first day of next month'));
+$deadline = date('Y-m-t', strtotime("+" . ($months - 1) . " months", strtotime($fromDate)));
 
 // Các thuộc tính chi tiết được bổ sung theo từng phiên bản CSDL.
 $detailColumns = ['size_label', 'mau_label', 'loai_label', 'quycach_label'];
@@ -44,6 +46,10 @@ foreach ($detailColumns as $column) {
 $rulesTableCheck = mysqli_query($conn, "SELECT 1 FROM information_schema.tables
     WHERE table_schema = DATABASE() AND table_name = 'bhld_vattu_thuoctinh' LIMIT 1");
 $hasAttributeRules = $rulesTableCheck && mysqli_num_rows($rulesTableCheck) > 0;
+$employeeStatusCheck = mysqli_query($conn, "SELECT 1 FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'bhld_nhanvien'
+      AND column_name = 'trangthai' LIMIT 1");
+$hasEmployeeStatus = $employeeStatusCheck && mysqli_num_rows($employeeStatusCheck) > 0;
 $rulesJoin = $hasAttributeRules
     ? 'LEFT JOIN bhld_vattu_thuoctinh q ON q.mavt = ct.mavt'
     : '';
@@ -69,6 +75,9 @@ $detailExpressions = [
     'loai_label' => $typeExpr,
     'quycach_label' => $specExpr,
 ];
+$attributeRuleSelectSql = $hasAttributeRules
+    ? 'q.cho_phep_size AS cho_phep_size, q.cho_phep_mau AS cho_phep_mau, q.cho_phep_loai AS cho_phep_loai'
+    : '0 AS cho_phep_size, 0 AS cho_phep_mau, 0 AS cho_phep_loai';
 foreach ($detailColumns as $column) {
     if (in_array($column, $existingDetailColumns, true) || $hasAttributeRules) {
         $detailSelect[$column] = $detailExpressions[$column] . " AS $column";
@@ -102,8 +111,12 @@ $detailGroupBySql = empty($detailGroupExpressions)
 // ---------------------------------------------------------------
 $where = "ct.sl = 1
           AND ct.ngnhantt != '1911-11-11'
-          AND ct.ngnhantt >= '$today'
+          AND ct.ngnhantt >= '$fromDate'
           AND ct.ngnhantt <= '$deadline'";
+
+if ($hasEmployeeStatus) {
+    $where .= " AND COALESCE(nv.trangthai, 1) = 1";
+}
 
 if ($mapb !== '') $where .= " AND nv.mapb = '$mapb'";
 if ($manv !== '') $where .= " AND nv.manv = '$manv'";
@@ -120,6 +133,7 @@ $sqlDetail = "SELECT
         d.tenvt,
         d.dvt,
         $detailSelectSql,
+        $attributeRuleSelectSql,
         $quantityExpr AS so_luong_can_cap,
         ct.ngnhan,
         ct.ngnhantt,
@@ -229,17 +243,21 @@ $sqlPb = "SELECT DISTINCT nv.mapb, pb.tenphong
           JOIN bhld_nhanvien nv ON nv.manv = ctu.manv
           LEFT JOIN bhld_phongban pb ON pb.mapb = nv.mapb
           WHERE ct.sl = 1 AND ct.ngnhantt != '1911-11-11'
-            AND ct.ngnhantt >= '$today' AND ct.ngnhantt <= '$deadline'
-          ORDER BY nv.mapb";
-$resPb = mysqli_query($conn, $sqlPb);
+            AND ct.ngnhantt >= '$fromDate' AND ct.ngnhantt <= '$deadline'
+                    ";
 $phongBanList = [];
+if ($hasEmployeeStatus) {
+    $sqlPb .= " AND COALESCE(nv.trangthai, 1) = 1";
+}
+$sqlPb .= " ORDER BY nv.mapb";
+$resPb = mysqli_query($conn, $sqlPb);
 if ($resPb) {
     while ($pb = mysqli_fetch_assoc($resPb)) $phongBanList[] = $pb;
 }
 
 sendSuccess([
     'months'        => $months,
-    'from_date'     => $today,
+    'from_date'     => $fromDate,
     'to_date'       => $deadline,
     'group'         => $group,
     'tong_nhan_vien'=> $tongNhanVien,
