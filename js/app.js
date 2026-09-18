@@ -3288,7 +3288,7 @@ function initScheduleTab() {
     schInitialized = true;
     document.getElementById('sch-load-btn').addEventListener('click', loadSchedule);
     document.getElementById('sch-reload-btn').addEventListener('click', loadSchedule);
-    document.getElementById('sch-export-csv-btn').addEventListener('click', exportScheduleCsv);
+    document.getElementById('sch-export-excel-btn').addEventListener('click', exportScheduleExcel);
     document.getElementById('sch-group').addEventListener('change', () => {
       if (schData) renderSchedule(schData);
     });
@@ -3492,65 +3492,66 @@ function renderSchedule(data) {
   }).join('');
 }
 
-function exportScheduleCsv() {
+function exportScheduleExcel() {
   if (!schData || !schData.detail || schData.detail.length === 0) {
-    showToast('Không có dữ liệu để xuất', 'warning');
+    showToast('Không có dữ liệu để xuất Excel', 'warning');
     return;
   }
   const months = document.getElementById('sch-months').value;
-  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const attributeValue = (row, field) => schData.attribute_rules_ready
     ? (row[field] || '')
     : '';
-  const sourceNote = schData.attribute_rules_ready
-    ? 'Thuộc tính theo quy tắc CSDL'
-    : 'Thuộc tính để trống: chưa có bảng quy tắc CSDL';
-  const header = ['Mã NV','Tên nhân viên','Mã BP','Tên bộ phận','Mã VT','Tên vật tư','Size','Màu','Loại','Quy cách','Số lượng','ĐVT','Ngày nhận','Ngày cấp tiếp','Còn lại (ngày)','Tháng cấp'];
-  const rows = [
-    [esc('Báo cáo lịch cấp phát'), esc(`${months} tháng tiếp theo`)].join(','),
-    [esc('Từ ngày'), esc(schData.from_date || '')].join(','),
-    [esc('Đến ngày'), esc(schData.to_date || '')].join(','),
-    [esc('Nguồn thuộc tính'), esc(sourceNote)].join(','),
-    '',
-    header.join(','),
-    ...schData.detail.map(r =>
-      [r.manv, esc(r.tennhanvien), r.mapb, esc(r.tenphongban||''), r.mavt, esc(r.tenvt),
-       esc(attributeValue(r, 'size_label')), esc(attributeValue(r, 'mau_label')),
-       esc(attributeValue(r, 'loai_label')), esc(attributeValue(r, 'quycach_label')),
-       r.so_luong_can_cap || 1, esc(r.dvt||''), esc(r.ngnhan), esc(r.ngnhantt),
-       r.con_lai_ngay, esc(r.thang_cap)].join(',')
-    )
-  ];
-
-  rows.push('');
-  rows.push(['Thống kê theo loại', 'Mã VT', 'Tên vật tư', 'Size', 'Màu', 'Loại', 'Quy cách', 'ĐVT', 'Tổng số lượng', 'Số nhân viên', 'Số chứng từ', 'Ngày cấp gần nhất']
-    .map(c => esc(c)).join(','));
-  (schData.by_type || []).forEach(r => {
-    rows.push([
-      'Theo loại',
-      r.mavt || '',
-      r.tenvt || '',
-      attributeValue(r, 'size_label'),
-      attributeValue(r, 'mau_label'),
-      attributeValue(r, 'loai_label'),
-      attributeValue(r, 'quycach_label'),
-      r.dvt || '',
-      r.tong_suat || 0,
-      r.so_nhan_vien || 0,
-      r.so_chung_tu || 0,
-      r.ngay_cap_gan_nhat || ''
-    ].map(c => esc(c)).join(','));
+  const detailHeaders = ['Mã NV','Tên nhân viên','Mã BP','Tên bộ phận','Mã VT','Tên vật tư','Size','Màu','Loại','Số lượng','ĐVT','Ngày nhận','Ngày cấp tiếp','Còn lại (ngày)','Tháng cấp'];
+  const detailRows = schData.detail.map(r => [
+    r.manv, r.tennhanvien, r.mapb, r.tenphongban || '', r.mavt, r.tenvt,
+    attributeValue(r, 'size_label'), attributeValue(r, 'mau_label'),
+    attributeValue(r, 'loai_label'), r.so_luong_can_cap || 1, r.dvt || '', r.ngnhan, r.ngnhantt,
+    r.con_lai_ngay, r.thang_cap
+  ]);
+  const summaryHeaders = ['Mã VT','Tên vật tư','Size','Màu','Loại','ĐVT','Tổng số lượng','Số nhân viên','Số chứng từ'];
+  const summaryRows = (schData.by_type || []).map(r => [
+    r.mavt, r.tenvt, attributeValue(r, 'size_label'), attributeValue(r, 'mau_label'),
+    attributeValue(r, 'loai_label'), r.dvt || '',
+    r.tong_suat || 0, r.so_nhan_vien || 0, r.so_chung_tu || 0
+  ]).sort((a, b) => {
+    const byName = String(a[1] || '').localeCompare(String(b[1] || ''), 'vi');
+    return byName || String(a[2] || '').localeCompare(String(b[2] || ''), 'vi', { numeric: true });
   });
-  const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const table = (title, headers, rows, className = '', options = {}) => {
+    const widths = options.widths || [];
+    const centered = new Set(options.centered || []);
+    const colgroup = `<colgroup>${headers.map((_, index) => widths[index] ? `<col style="width:${widths[index]};">` : '<col>').join('')}</colgroup>`;
+    const headerHtml = headers.map((h, index) => `<th style="${centered.has(index) ? 'text-align:center;' : ''}${widths[index] ? `width:${widths[index]};` : ''}">${esc(h)}</th>`).join('');
+    const rowsHtml = rows.map(row => `<tr>${row.map((v, index) => `<td style="${centered.has(index) ? 'text-align:center;' : ''}${widths[index] ? `width:${widths[index]};` : ''}">${esc(v)}</td>`).join('')}</tr>`).join('');
+    return `<table class="${className}">${colgroup}<caption>${esc(title)}</caption><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
+  };
+  const summaryOptions = {
+    widths: ['10ch', '28ch', '10ch', '7ch', '14ch', '10ch', '14ch', '14ch', '14ch'],
+    centered: [2, 3, 4]
+  };
+  const detailOptions = {
+    widths: ['12ch', '24ch', '10ch', '26ch', '10ch', '28ch', '10ch', '7ch', '14ch', '12ch', '10ch', '12ch', '14ch', '14ch', '12ch'],
+    centered: [6, 7, 8]
+  };
+  const workbook = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{font-family:Calibri,Arial,sans-serif;color:#17212b}h1{color:#0d416c;background:#dceef8;padding:10px 12px;border-left:6px solid #1769aa}.report-meta{padding:8px 10px;background:#f1f7fa;border:1px solid #b9cbd5;color:#365366}table{border-collapse:collapse;margin:14px 0 28px;width:100%}table.summary{margin-bottom:0}caption{text-align:left;font-size:17px;font-weight:bold;color:#fff;background:#1769aa;padding:9px 10px}th{background:#dceef8;color:#0d416c;font-weight:bold}th,td{border:1px solid #b9cbd5;padding:6px 8px;vertical-align:top;white-space:nowrap}tr:nth-child(even){background:#f5f9fb}.section-gap-table{border-collapse:collapse;margin:0;width:100%}.section-gap-table td{height:1em;border:0;padding:0}</style></head><body>
+    <h1>Báo cáo lịch cấp phát - ${esc(months)} tháng tiếp theo</h1>
+    <div class="report-meta"><strong>Từ ngày:</strong> ${esc(schData.from_date || '')} &nbsp; | &nbsp; <strong>Đến ngày:</strong> ${esc(schData.to_date || '')}</div>
+    ${table('Tổng hợp theo vật tư', summaryHeaders, summaryRows, 'summary', summaryOptions)}
+    <table class="section-gap-table"><tbody><tr><td>&nbsp;</td></tr><tr><td>&nbsp;</td></tr></tbody></table>
+    ${table('Chi tiết cấp phát', detailHeaders, detailRows, 'detail', detailOptions)}
+  </body></html>`;
+  const blob = new Blob(['\uFEFF' + workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `lich_cap_phat_${months}thang_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `lich_cap_phat_${months}thang_${new Date().toISOString().slice(0,10)}.xls`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  showToast('Xuất CSV thành công', 'success');
+  showToast('Xuất Excel thành công', 'success');
 }
 
 // ====================================================================

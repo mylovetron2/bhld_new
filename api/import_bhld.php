@@ -720,49 +720,88 @@ try {
   <meta charset="UTF-8">
   <title>Import Excel BHLD</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; max-width: 760px; }
-    .row { margin-bottom: 10px; }
-    label { display: inline-block; min-width: 120px; font-weight: 600; }
-    input[type=text], input[type=file] { width: 460px; max-width: 100%; padding: 6px; }
-    button { padding: 8px 14px; cursor: pointer; }
-    .ok { color: #0a7a0a; }
-    .err { color: #b00020; }
-        .log-wrap { margin-top: 12px; max-height: 360px; overflow: auto; border: 1px solid #eee; border-radius: 6px; }
-        .log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .log-table th, .log-table td { border-bottom: 1px solid #f0f0f0; padding: 6px 8px; text-align: left; vertical-align: top; }
-        .log-ok { color: #0a7a0a; font-weight: 600; }
-        .log-skip { color: #9a6a00; font-weight: 600; }
-        .log-fail { color: #b00020; font-weight: 600; }
-        .card + .card { margin-top: 16px; }
-        .manual-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-        .manual-grid .row { margin-bottom: 0; }
-        select, input[type=number] { width: 100%; max-width: 100%; padding: 6px; }
+        :root { --ink:#182735; --muted:#647481; --line:#d8e2e8; --blue:#1769aa; --blue-dark:#0d416c; --blue-soft:#eef7fc; --green:#28724d; --green-soft:#edf8f1; --red:#b42318; --amber:#9b6412; --paper:#fff; --bg:#eef3f6; }
+        * { box-sizing:border-box; }
+        body { margin:0; min-height:100vh; color:var(--ink); background:linear-gradient(145deg,#eaf3f8 0%,#f7fafb 48%,#edf4f1 100%); font:14px/1.45 "Segoe UI",Arial,sans-serif; }
+        .page-shell { width:min(1180px,100%); margin:0 auto; padding:30px 20px 48px; }
+        .page-header { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:22px; }
+        .eyebrow { margin:0 0 5px; color:var(--blue); font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+        h1 { margin:0; color:var(--blue-dark); font-size:clamp(26px,4vw,38px); letter-spacing:-.02em; }
+        h2 { margin:0; font-size:19px; color:var(--blue-dark); }
+        h3 { margin:0; font-size:18px; color:var(--blue-dark); }
+        p { color:var(--muted); }
+        .page-header p { max-width:440px; margin:0; text-align:right; }
+        .card { padding:22px; border:1px solid rgba(216,226,232,.95); border-radius:12px; background:rgba(255,255,255,.94); box-shadow:0 8px 28px rgba(34,62,80,.08); }
+        .card + .card { margin-top:18px; }
+        .section-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+        .section-heading p { margin:4px 0 0; }
+        .section-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:10px; background:var(--blue-soft); color:var(--blue); font-size:20px; }
+        .upload-panel { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:end; padding:18px; border:1px dashed #9dc5dc; border-radius:10px; background:var(--blue-soft); }
+        .field-label { display:block; margin-bottom:6px; color:var(--ink); font-size:12px; font-weight:700; }
+        .hint { margin:7px 0 0; font-size:12px; }
+        input[type=text], input[type=file], input[type=number], select { width:100%; max-width:100%; min-height:40px; padding:9px 11px; border:1px solid #c8d5dd; border-radius:7px; background:#fff; color:var(--ink); font:inherit; }
+        input:focus, select:focus { outline:3px solid rgba(23,105,170,.14); border-color:var(--blue); }
+        input[readonly] { background:#f5f8fa; color:var(--muted); }
+        button { min-height:40px; padding:9px 16px; border:0; border-radius:7px; background:var(--blue); color:#fff; font:600 14px inherit; cursor:pointer; box-shadow:0 2px 5px rgba(23,105,170,.18); }
+        button:hover { background:#125789; }
+        button:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
+        .primary-action { min-width:145px; }
+        .row { margin-bottom:14px; }
+        .manual-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; }
+        .manual-grid .row { margin-bottom:0; }
+        .manual-grid + .row { margin-top:18px; }
+        .manual-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; padding:15px; border-radius:9px; background:#f6f9fb; border:1px solid var(--line); margin-bottom:18px; }
+        .form-section-label { grid-column:1/-1; margin:3px 0 -2px; color:var(--blue-dark); font-weight:700; font-size:13px; }
+        .status-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:18px; }
+        .status-item { padding:12px; border-radius:8px; background:#f7fafb; border:1px solid var(--line); }
+        .status-item strong { display:block; margin-top:2px; font-size:21px; }
+        .status-label { color:var(--muted); font-size:12px; }
+        .ok { color:var(--green); }
+        .err { color:var(--red); }
+        .result-box { margin-top:18px; padding:14px; border-radius:8px; background:var(--green-soft); border:1px solid #b9dfc8; }
+        .error-box { margin-top:18px; padding:14px; border-radius:8px; background:#fff1f0; border:1px solid #f0c1bd; }
+        .log-wrap { margin-top:18px; max-height:360px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+        .log-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .log-table th, .log-table td { padding:9px 10px; border-bottom:1px solid #edf1f3; text-align:left; vertical-align:top; }
+        .log-table th { position:sticky; top:0; background:#f1f7fa; color:var(--blue-dark); font-size:12px; }
+        .log-ok { color:var(--green); font-weight:600; }
+        .log-skip { color:var(--amber); font-weight:600; }
+        .log-fail { color:var(--red); font-weight:600; }
+        .subtle-rule { height:1px; margin:20px 0; border:0; background:var(--line); }
+        .footer-note { margin-top:22px; color:var(--muted); font-size:12px; text-align:center; }
+        @media (max-width:760px) { .page-shell{padding:20px 12px 34px}.page-header{display:block}.page-header p{margin-top:8px;text-align:left}.upload-panel{grid-template-columns:1fr}.manual-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+        @media (max-width:480px) { .card{padding:16px}.manual-grid,.manual-toolbar{grid-template-columns:1fr}.status-grid{grid-template-columns:1fr 1fr} }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h3>Import nhân viên từ Excel</h3>
-                <p>Mẫu cột: STT, Danh số, Họ và tên, Chức danh, Giầy, Quần áo, Mũ, Kính, Găng tay, Khẩu trang, Áo mưa, Phin lọc khí độc, Áo phao cứu sinh, Nút bịt tai chống ồn, Găng tay da thợ hàn. Không cần cột Mã phòng ban/Mã định mức.</p>
+    <div class="page-shell">
+        <header class="page-header">
+            <div><p class="eyebrow">BHLD · Dữ liệu nhân sự</p><h1>Import & quản lý định mức</h1></div>
+            <p>Nạp danh sách nhân viên từ Excel hoặc cập nhật nhanh hồ sơ và định mức theo từng người.</p>
+        </header>
 
-    <form method="post" enctype="multipart/form-data">
-      <div class="row">
-        <label>File Excel</label>
-        <input type="file" name="excel_file" accept=".xlsx,.xls,.csv" required>
-      </div>
-      <div class="row">
-        <button type="submit">Import</button>
-      </div>
-    </form>
+    <div class="card">
+        <div class="section-heading"><div><h2>Import từ Excel</h2><p>Đồng bộ nhân viên, hồ sơ an toàn lao động và định mức vật tư.</p></div><div class="section-icon">↥</div></div>
+        <div class="upload-panel">
+            <div><label class="field-label" for="excel-file">Chọn file dữ liệu</label><input id="excel-file" type="file" name="excel_file" accept=".xlsx,.xls,.csv" form="excel-import-form" required><p class="hint">Hỗ trợ .xlsx, .xls và .csv. Hệ thống sẽ tự nhận diện dòng tiêu đề.</p></div>
+            <button class="primary-action" type="submit" form="excel-import-form">Import dữ liệu</button>
+        </div>
+
+        <form id="excel-import-form" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="excel_file_marker" value="1">
+        </form>
+        <p class="hint">Mẫu cột: STT, Danh số, Họ và tên, Chức danh, Giầy, Quần áo, Mũ, Kính, Găng tay, Khẩu trang, Áo mưa, Phin lọc khí độc, Áo phao cứu sinh, Nút bịt tai chống ồn, Găng tay da thợ hàn.</p>
 
     <?php if ($_SERVER['REQUEST_METHOD'] === 'POST'): ?>
-      <hr>
-      <div class="ok">Tổng dòng dữ liệu: <?php echo (int)$report['total_rows']; ?></div>
-      <div class="ok">Import thành công: <?php echo (int)$report['imported']; ?></div>
-      <div>Bỏ qua: <?php echo (int)$report['skipped']; ?></div>
-            <div class="err">Thất bại: <?php echo (int)$report['failed']; ?></div>
+            <hr class="subtle-rule">
+            <div class="status-grid">
+                <div class="status-item"><span class="status-label">Tổng dòng</span><strong><?php echo (int)$report['total_rows']; ?></strong></div>
+                <div class="status-item"><span class="status-label">Thành công</span><strong class="ok"><?php echo (int)$report['imported']; ?></strong></div>
+                <div class="status-item"><span class="status-label">Bỏ qua</span><strong><?php echo (int)$report['skipped']; ?></strong></div>
+                <div class="status-item"><span class="status-label">Thất bại</span><strong class="err"><?php echo (int)$report['failed']; ?></strong></div>
+            </div>
       <?php if (!empty($report['errors'])): ?>
-        <div class="err">
+        <div class="error-box err">
           <?php foreach ($report['errors'] as $er): ?>
             <div>- <?php echo h($er); ?></div>
           <?php endforeach; ?>
@@ -804,12 +843,12 @@ try {
   </div>
 
     <div class="card">
-        <h3>Nhập tay theo nhân viên</h3>
-        <p>Chọn phòng ban, chọn nhân viên, sau đó nhập thông số và định mức cho đúng người.</p>
+        <div class="section-heading"><div><h2>Nhập tay theo nhân viên</h2><p>Chọn đúng người trước khi cập nhật hồ sơ và định mức.</p></div><div class="section-icon">✎</div></div>
 
-        <form method="get" class="manual-grid" style="margin-bottom: 10px;">
+        <form method="get" class="manual-toolbar">
+            <div class="form-section-label">1. Chọn phạm vi</div>
             <div class="row">
-                <label>Phòng ban</label>
+                <label class="field-label">Phòng ban</label>
                 <select name="manual_mapb" onchange="this.form.submit()">
                     <option value="">-- Chọn phòng ban --</option>
                     <?php foreach ($departments as $dep): ?>
@@ -820,7 +859,7 @@ try {
                 </select>
             </div>
             <div class="row">
-                <label>Nhân viên</label>
+                <label class="field-label">Nhân viên</label>
                 <select name="manual_manv" onchange="this.form.submit()" <?php echo empty($employeesInDepartment) ? 'disabled' : ''; ?>>
                     <option value="">-- Chọn nhân viên --</option>
                     <?php foreach ($employeesInDepartment as $emp): ?>
@@ -837,8 +876,9 @@ try {
             <input type="hidden" name="manual_mapb" value="<?php echo h($selectedMapb ?? ''); ?>">
             <input type="hidden" name="manual_manv" value="<?php echo h($selectedManv ?? ''); ?>">
 
+            <div class="form-section-label">2. Hồ sơ và định mức</div>
             <div class="row">
-                <label>Nhân viên đã chọn</label>
+                <label class="field-label">Nhân viên đã chọn</label>
                 <input type="text" value="<?php echo h($selectedEmployee ? ($selectedEmployee['manv'] . ' - ' . $selectedEmployee['tennhanvien']) : 'Chưa chọn nhân viên'); ?>" readonly>
             </div>
 
@@ -914,15 +954,17 @@ try {
             </div>
 
             <div class="row" style="margin-top:12px;">
-                <button type="submit" <?php echo $selectedEmployee ? '' : 'disabled'; ?>>Lưu nhập tay</button>
+                <button class="primary-action" type="submit" <?php echo $selectedEmployee ? '' : 'disabled'; ?>>Lưu cập nhật</button>
             </div>
         </form>
 
         <?php if ($manualResult['ok'] !== null): ?>
-            <div class="<?php echo $manualResult['ok'] ? 'ok' : 'err'; ?>" style="margin-top:10px;">
+            <div class="result-box <?php echo $manualResult['ok'] ? 'ok' : 'err'; ?>">
                 <?php echo h($manualResult['message']); ?>
             </div>
         <?php endif; ?>
+        </div>
+        <p class="footer-note">Dữ liệu nhạy cảm: kiểm tra đúng nhân viên và file trước khi import.</p>
     </div>
 </body>
 </html>
