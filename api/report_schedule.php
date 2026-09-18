@@ -41,46 +41,28 @@ foreach ($detailColumns as $column) {
         $detailSelect[$column] = "'' AS $column";
     }
 }
-$profileTableCheck = mysqli_query($conn, "SELECT 1 FROM information_schema.tables
-    WHERE table_schema = DATABASE() AND table_name = 'bhld_nhanvien_hoso' LIMIT 1");
-$hasEmployeeProfile = $profileTableCheck && mysqli_num_rows($profileTableCheck) > 0;
-
-// Dữ liệu cũ thường lưu size trong hồ sơ nhân viên thay vì trên dòng cấp phát.
-$equipmentName = "LOWER(REPLACE(REPLACE(REPLACE(d.tenvt, ' ', ''), 'đ', 'd'), 'Đ', 'D'))";
-$profileJoin = $hasEmployeeProfile
-    ? 'LEFT JOIN bhld_nhanvien_hoso hs ON hs.manv = nv.manv'
+$rulesTableCheck = mysqli_query($conn, "SELECT 1 FROM information_schema.tables
+    WHERE table_schema = DATABASE() AND table_name = 'bhld_vattu_thuoctinh' LIMIT 1");
+$hasAttributeRules = $rulesTableCheck && mysqli_num_rows($rulesTableCheck) > 0;
+$rulesJoin = $hasAttributeRules
+    ? 'LEFT JOIN bhld_vattu_thuoctinh q ON q.mavt = ct.mavt'
     : '';
 $ctSizeExpr = in_array('size_label', $existingDetailColumns, true) ? 'ct.size_label' : "''";
 $ctColorExpr = in_array('mau_label', $existingDetailColumns, true) ? 'ct.mau_label' : "''";
 $ctTypeExpr = in_array('loai_label', $existingDetailColumns, true) ? 'ct.loai_label' : "''";
 $ctSpecExpr = in_array('quycach_label', $existingDetailColumns, true) ? 'ct.quycach_label' : "''";
-$sizeEligible = "(LOWER(d.tenvt) LIKE '%giày%' OR $equipmentName LIKE '%giay%'
-    OR LOWER(d.tenvt) LIKE '%ủng%' OR $equipmentName LIKE '%ung%'
-    OR LOWER(d.tenvt) LIKE '%quần áo%' OR LOWER(d.tenvt) LIKE '%quầnáo%'
-    OR LOWER(d.tenvt) LIKE '%áo quần%' OR LOWER(d.tenvt) LIKE '%áoquần%'
-    OR $equipmentName LIKE '%quanao%')";
-$sizeExpr = $hasEmployeeProfile
-    ? "CASE WHEN $sizeEligible THEN COALESCE(NULLIF($ctSizeExpr, ''), CASE
-            WHEN LOWER(d.tenvt) LIKE '%giày%' OR $equipmentName LIKE '%giay%' OR LOWER(d.tenvt) LIKE '%ủng%' OR $equipmentName LIKE '%ung%' THEN hs.giay_size
-            WHEN LOWER(d.tenvt) LIKE '%quần áo%' OR LOWER(d.tenvt) LIKE '%quầnáo%'
-                OR LOWER(d.tenvt) LIKE '%áo quần%' OR LOWER(d.tenvt) LIKE '%áoquần%'
-                OR $equipmentName LIKE '%quanao%' THEN hs.quanao_size
-            ELSE NULL END)
-        ELSE NULL END"
-    : "CASE WHEN $sizeEligible THEN $ctSizeExpr ELSE NULL END";
-$colorExpr = $hasEmployeeProfile
-    ? "COALESCE(NULLIF($ctColorExpr, ''), CASE
-            WHEN LOWER(d.tenvt) LIKE '%mũ%' OR $equipmentName LIKE '%mu%' OR LOWER(d.tenvt) LIKE '%nón%' OR $equipmentName LIKE '%non%' THEN hs.mu_mau
-            ELSE NULL END)"
-    : $ctColorExpr;
-$typeExpr = $ctTypeExpr;
-$specExpr = $ctSpecExpr;
-if ($hasEmployeeProfile) {
-    $specExpr = "COALESCE(NULLIF($ctSpecExpr, ''), CONCAT_WS(' - ',
-        CASE WHEN $sizeExpr IS NOT NULL AND $sizeExpr <> '' THEN CONCAT('Size ', $sizeExpr) END,
-        CASE WHEN $colorExpr IS NOT NULL AND $colorExpr <> '' THEN CONCAT('Mau ', $colorExpr) END,
-        CASE WHEN $typeExpr IS NOT NULL AND $typeExpr <> '' THEN CONCAT('Loai ', $typeExpr) END))";
-}
+$sizeExpr = $hasAttributeRules
+    ? "CASE WHEN q.cho_phep_size = 1 THEN NULLIF($ctSizeExpr, '') ELSE NULL END"
+    : 'NULL';
+$colorExpr = $hasAttributeRules
+    ? "CASE WHEN q.cho_phep_mau = 1 THEN NULLIF($ctColorExpr, '') ELSE NULL END"
+    : 'NULL';
+$typeExpr = $hasAttributeRules
+    ? "CASE WHEN q.cho_phep_loai = 1 THEN NULLIF($ctTypeExpr, '') ELSE NULL END"
+    : 'NULL';
+$specExpr = $hasAttributeRules
+    ? "CASE WHEN q.cho_phep_quycach = 1 THEN NULLIF($ctSpecExpr, '') ELSE NULL END"
+    : 'NULL';
 $detailExpressions = [
     'size_label' => $sizeExpr,
     'mau_label' => $colorExpr,
@@ -88,7 +70,7 @@ $detailExpressions = [
     'quycach_label' => $specExpr,
 ];
 foreach ($detailColumns as $column) {
-    if (in_array($column, $existingDetailColumns, true) || $hasEmployeeProfile) {
+    if (in_array($column, $existingDetailColumns, true) || $hasAttributeRules) {
         $detailSelect[$column] = $detailExpressions[$column] . " AS $column";
         $detailGroupExpressions[] = $detailExpressions[$column];
     }
@@ -147,7 +129,7 @@ $sqlDetail = "SELECT
     JOIN bhld_ctu   ctu ON ctu.mact = ct.mact
     JOIN bhld_nhanvien nv ON nv.manv = ctu.manv
     LEFT JOIN bhld_phongban pb ON pb.mapb = nv.mapb
-    $profileJoin
+    $rulesJoin
     JOIN bhld_dmvattu d ON d.mavt = ct.mavt
     WHERE $where
     ORDER BY nv.mapb, nv.manv, ct.ngnhantt ASC";
@@ -177,7 +159,7 @@ $sqlByType = "SELECT
     FROM bhld_ctctu ct
     JOIN bhld_ctu ctu ON ctu.mact = ct.mact
     JOIN bhld_nhanvien nv ON nv.manv = ctu.manv
-    $profileJoin
+    $rulesJoin
     JOIN bhld_dmvattu d ON d.mavt = ct.mavt
     WHERE $where
     GROUP BY ct.mavt, d.tenvt, d.dvt$detailGroupBySql
@@ -264,6 +246,7 @@ sendSuccess([
     'tong_phong_ban'=> $tongPhongBan,
     'tong_loai_vt'  => $tongLoaiVT,
     'tong_suat_cap' => $tongSuatCap,
+    'attribute_rules_ready' => $hasAttributeRules,
     'phong_ban_list'=> $phongBanList,
     'by_type'       => $byType,
     'grouped'       => array_values($grouped),

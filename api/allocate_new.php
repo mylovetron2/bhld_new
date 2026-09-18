@@ -3,7 +3,8 @@
  * API Cấp phát thiết bị - NEW VERSION
  */
 
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/vattu_attributes.php';
 
 function columnExists($conn, $tableName, $columnName) {
     $tableName = mysqli_real_escape_string($conn, $tableName);
@@ -37,10 +38,7 @@ try {
         $hasType = columnExists($conn, 'bhld_ctctu', 'loai_label');
         $hasSpec = columnExists($conn, 'bhld_ctctu', 'quycach_label');
 
-        $sizeLabel = isset($data['size']) ? mysqli_real_escape_string($conn, trim((string)$data['size'])) : '';
-        $mauLabel = isset($data['mau']) ? mysqli_real_escape_string($conn, trim((string)$data['mau'])) : '';
-        $loaiLabel = isset($data['loai']) ? mysqli_real_escape_string($conn, trim((string)$data['loai'])) : '';
-        $quyCachLabel = isset($data['quycach']) ? mysqli_real_escape_string($conn, trim((string)$data['quycach'])) : '';
+        $attributes = null;
         
         $selectParts = ['dmtg', 'sl'];
         if ($hasQtyRequired) $selectParts[] = 'so_luong_yeu_cau';
@@ -59,6 +57,20 @@ try {
         if ($row['sl'] != 0) {
             sendError('Đã cấp phát', 400);
         }
+
+        // Nếu request không truyền thuộc tính, giữ giá trị hợp lệ đang có trên dòng.
+        $attributeInput = $data;
+        foreach (['size', 'mau', 'loai', 'quycach'] as $field) {
+            $labelField = $field . '_label';
+            if (!array_key_exists($field, $attributeInput) && !array_key_exists($labelField, $attributeInput)) {
+                $attributeInput[$labelField] = $row[$labelField] ?? '';
+            }
+        }
+        $attributes = sanitizeVattuAttributes($conn, $mavt, $attributeInput);
+        $sizeLabel = $attributes['size'];
+        $mauLabel = $attributes['mau'];
+        $loaiLabel = $attributes['loai'];
+        $quyCachLabel = $attributes['quycach'];
         
         $dmtg = $row['dmtg'];
         $qtyRequired = $hasQtyRequired ? max(1, intval($row['so_luong_yeu_cau'])) : 1;
@@ -68,14 +80,6 @@ try {
         if ($mauLabel === '' && $hasColor && !empty($row['mau_label'])) $mauLabel = mysqli_real_escape_string($conn, $row['mau_label']);
         if ($loaiLabel === '' && $hasType && !empty($row['loai_label'])) $loaiLabel = mysqli_real_escape_string($conn, $row['loai_label']);
         if ($quyCachLabel === '' && $hasSpec && !empty($row['quycach_label'])) $quyCachLabel = mysqli_real_escape_string($conn, $row['quycach_label']);
-
-        if ($quyCachLabel === '') {
-            $parts = [];
-            if ($sizeLabel !== '') $parts[] = 'Size ' . $sizeLabel;
-            if ($mauLabel !== '') $parts[] = 'Mau ' . $mauLabel;
-            if ($loaiLabel !== '') $parts[] = 'Loai ' . $loaiLabel;
-            $quyCachLabel = implode(' - ', $parts);
-        }
 
         $ngnhantt = date('Y-m-d', strtotime($ngnhan . ' + ' . $dmtg . ' month'));
         

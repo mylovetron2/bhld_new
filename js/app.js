@@ -1122,9 +1122,10 @@ function getAutoLabelsForEquipment(mavt, profilePayload) {
   const eq = (State.equipment || []).find(x => String(x.mavt) === String(mavt));
   const name = normalizeVietnameseText(eq?.tenvt || '');
 
-  const isShoes = name.includes('giay') || name.includes('ung');
-  const isClothes = name.includes('quan ao') || name.includes('ao') || name.includes('quan');
-  const isHelmet = name.includes('mu') || name.includes('non');
+  // Chỉ ánh xạ hồ sơ cho các mã vật tư đã được quy định rõ.
+  const isShoes = String(mavt) === '500120';
+  const isClothes = String(mavt) === '500860';
+  const isHelmet = String(mavt) === '500500';
 
   let sizeLabel = '';
   let mauLabel = '';
@@ -1139,12 +1140,6 @@ function getAutoLabelsForEquipment(mavt, profilePayload) {
   }
   if (isHelmet) {
     mauLabel = profilePayload.mu_mau || '';
-  }
-
-  if (!sizeLabel && !mauLabel && !loaiLabel) {
-    sizeLabel = profilePayload.quanao_size || profilePayload.giay_size || '';
-    mauLabel = profilePayload.mu_mau || '';
-    loaiLabel = profilePayload.giay_loai || '';
   }
 
   return { size_label: sizeLabel, mau_label: mauLabel, loai_label: loaiLabel };
@@ -1459,11 +1454,6 @@ function buildQuickCtMact(ngct, mapb, manv, mavt) {
 
 function buildCtVattuItem(mavt, dmtg, soLuong, profilePayload) {
   const labels = getAutoLabelsForEquipment(mavt, profilePayload);
-  const quycach = [
-    labels.size_label ? `Size ${labels.size_label}` : '',
-    labels.mau_label ? `Mau ${labels.mau_label}` : '',
-    labels.loai_label ? `Loai ${labels.loai_label}` : '',
-  ].filter(Boolean).join(' - ');
 
   return {
     mavt: String(mavt),
@@ -1472,7 +1462,7 @@ function buildCtVattuItem(mavt, dmtg, soLuong, profilePayload) {
     size: labels.size_label,
     mau: labels.mau_label,
     loai: labels.loai_label,
-    quycach,
+    quycach: '',
     size_label: labels.size_label,
     mau_label: labels.mau_label,
     loai_label: labels.loai_label,
@@ -1583,11 +1573,6 @@ async function saveEmployee() {
         const qty = parseInt(inp.value) || 0;
         if (qty > 0) {
           const labels = getAutoLabelsForEquipment(inp.dataset.mavt, profilePayload);
-          const quycach = [
-            labels.size_label ? `Size ${labels.size_label}` : '',
-            labels.mau_label ? `Mau ${labels.mau_label}` : '',
-            labels.loai_label ? `Loai ${labels.loai_label}` : '',
-          ].filter(Boolean).join(' - ');
           vattu.push({
             mavt: inp.dataset.mavt,
             dmtg: parseInt(inp.dataset.dmtg) || 0,
@@ -1595,7 +1580,7 @@ async function saveEmployee() {
             size: labels.size_label,
             mau: labels.mau_label,
             loai: labels.loai_label,
-            quycach,
+            quycach: '',
             size_label: labels.size_label,
             mau_label: labels.mau_label,
             loai_label: labels.loai_label,
@@ -3379,6 +3364,10 @@ function renderSchedule(data) {
     r.quycach_label ? `Quy cách: ${r.quycach_label}` : ''
   ].filter(Boolean).join(' | ') || '—';
 
+  const rulesNotice = data.attribute_rules_ready
+    ? `<div class="alert alert-success py-2 small mb-3"><i class="bi bi-shield-check me-1"></i>Thuộc tính được đọc theo quy tắc trong cơ sở dữ liệu, không suy ra từ tên vật tư hoặc hồ sơ nhân viên.</div>`
+    : `<div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-triangle me-1"></i>Chưa có bảng quy tắc thuộc tính vật tư. Các cột Size/Màu/Loại/Quy cách đang được để trống để tránh thống kê suy diễn.</div>`;
+
   const byTypeHtml = `
     <div class="card shadow-sm mb-3">
       <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
@@ -3423,7 +3412,7 @@ function renderSchedule(data) {
       </div>
     </div>`;
 
-  content.innerHTML = byTypeHtml + grouped.map(g => {
+  content.innerHTML = rulesNotice + byTypeHtml + grouped.map(g => {
     const icon = group === 'department' ? 'bi-building' :
                  group === 'month'      ? 'bi-calendar2' : 'bi-person';
 
@@ -3510,12 +3499,28 @@ function exportScheduleCsv() {
   }
   const months = document.getElementById('sch-months').value;
   const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const attributeValue = (row, field) => schData.attribute_rules_ready
+    ? (row[field] || '')
+    : '';
+  const sourceNote = schData.attribute_rules_ready
+    ? 'Thuộc tính theo quy tắc CSDL'
+    : 'Thuộc tính để trống: chưa có bảng quy tắc CSDL';
   const header = ['Mã NV','Tên nhân viên','Mã BP','Tên bộ phận','Mã VT','Tên vật tư','Size','Màu','Loại','Quy cách','Số lượng','ĐVT','Ngày nhận','Ngày cấp tiếp','Còn lại (ngày)','Tháng cấp'];
-  const rows = [header.join(','), ...schData.detail.map(r =>
-    [r.manv, esc(r.tennhanvien), r.mapb, esc(r.tenphongban||''), r.mavt, esc(r.tenvt), esc(r.size_label||''),
-     esc(r.mau_label||''), esc(r.loai_label||''), esc(r.quycach_label||''), r.so_luong_can_cap || 1, esc(r.dvt||''),
-     esc(r.ngnhan), esc(r.ngnhantt), r.con_lai_ngay, esc(r.thang_cap)].join(',')
-  )];
+  const rows = [
+    [esc('Báo cáo lịch cấp phát'), esc(`${months} tháng tiếp theo`)].join(','),
+    [esc('Từ ngày'), esc(schData.from_date || '')].join(','),
+    [esc('Đến ngày'), esc(schData.to_date || '')].join(','),
+    [esc('Nguồn thuộc tính'), esc(sourceNote)].join(','),
+    '',
+    header.join(','),
+    ...schData.detail.map(r =>
+      [r.manv, esc(r.tennhanvien), r.mapb, esc(r.tenphongban||''), r.mavt, esc(r.tenvt),
+       esc(attributeValue(r, 'size_label')), esc(attributeValue(r, 'mau_label')),
+       esc(attributeValue(r, 'loai_label')), esc(attributeValue(r, 'quycach_label')),
+       r.so_luong_can_cap || 1, esc(r.dvt||''), esc(r.ngnhan), esc(r.ngnhantt),
+       r.con_lai_ngay, esc(r.thang_cap)].join(',')
+    )
+  ];
 
   rows.push('');
   rows.push(['Thống kê theo loại', 'Mã VT', 'Tên vật tư', 'Size', 'Màu', 'Loại', 'Quy cách', 'ĐVT', 'Tổng số lượng', 'Số nhân viên', 'Số chứng từ', 'Ngày cấp gần nhất']
@@ -3525,10 +3530,10 @@ function exportScheduleCsv() {
       'Theo loại',
       r.mavt || '',
       r.tenvt || '',
-      r.size_label || '',
-      r.mau_label || '',
-      r.loai_label || '',
-      r.quycach_label || '',
+      attributeValue(r, 'size_label'),
+      attributeValue(r, 'mau_label'),
+      attributeValue(r, 'loai_label'),
+      attributeValue(r, 'quycach_label'),
       r.dvt || '',
       r.tong_suat || 0,
       r.so_nhan_vien || 0,

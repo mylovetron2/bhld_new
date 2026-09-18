@@ -56,6 +56,7 @@ try {
         sendSuccess($details, 'Lấy chi tiết chứng từ thành công');
     }
     else if ($method === 'POST') {
+        require_once __DIR__ . '/vattu_attributes.php';
         // Create new detail
         $data = json_decode(file_get_contents('php://input'), true);
         
@@ -70,6 +71,7 @@ try {
         $ngnhan = mysqli_real_escape_string($conn, $data['ngnhan']);
         $ngnhantt = mysqli_real_escape_string($conn, $data['ngnhantt']);
         $dmtg = intval($data['dmtg']);
+        $attributes = sanitizeVattuAttributes($conn, $mavt, $data);
         
         // Check if already exists
         $check = mysqli_query($conn, "SELECT mact FROM bhld_ctctu WHERE mact='$mact' AND mavt=$mavt");
@@ -96,22 +98,22 @@ try {
             $vals[] = max(0, intval($data['so_luong_cap']));
         }
         if ($hasSize && array_key_exists('size_label', $data)) {
-            $v = trim((string)$data['size_label']);
+            $v = $attributes['size'];
             $cols[] = 'size_label';
             $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
         }
         if ($hasColor && array_key_exists('mau_label', $data)) {
-            $v = trim((string)$data['mau_label']);
+            $v = $attributes['mau'];
             $cols[] = 'mau_label';
             $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
         }
         if ($hasType && array_key_exists('loai_label', $data)) {
-            $v = trim((string)$data['loai_label']);
+            $v = $attributes['loai'];
             $cols[] = 'loai_label';
             $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
         }
         if ($hasSpec && array_key_exists('quycach_label', $data)) {
-            $v = trim((string)$data['quycach_label']);
+            $v = $attributes['quycach'];
             $cols[] = 'quycach_label';
             $vals[] = $v === '' ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
         }
@@ -125,6 +127,7 @@ try {
         }
     }
     else if ($method === 'PUT') {
+        require_once __DIR__ . '/vattu_attributes.php';
         // Update detail
         $data = json_decode(file_get_contents('php://input'), true);
         
@@ -134,6 +137,7 @@ try {
         
         $mact = mysqli_real_escape_string($conn, $data['mact']);
         $mavt = intval($data['mavt']);
+        $attributes = sanitizeVattuAttributes($conn, $mavt, $data);
         
         // Check if exists
         $check = mysqli_query($conn, "SELECT mact FROM bhld_ctctu WHERE mact='$mact' AND mavt=$mavt");
@@ -168,19 +172,19 @@ try {
             $updates[] = "so_luong_cap = $qtyIssued";
         }
         if (columnExists($conn, 'bhld_ctctu', 'size_label') && array_key_exists('size_label', $data)) {
-            $v = trim((string)$data['size_label']);
+            $v = $attributes['size'];
             $updates[] = $v === '' ? "size_label = NULL" : "size_label = '" . mysqli_real_escape_string($conn, $v) . "'";
         }
         if (columnExists($conn, 'bhld_ctctu', 'mau_label') && array_key_exists('mau_label', $data)) {
-            $v = trim((string)$data['mau_label']);
+            $v = $attributes['mau'];
             $updates[] = $v === '' ? "mau_label = NULL" : "mau_label = '" . mysqli_real_escape_string($conn, $v) . "'";
         }
         if (columnExists($conn, 'bhld_ctctu', 'loai_label') && array_key_exists('loai_label', $data)) {
-            $v = trim((string)$data['loai_label']);
+            $v = $attributes['loai'];
             $updates[] = $v === '' ? "loai_label = NULL" : "loai_label = '" . mysqli_real_escape_string($conn, $v) . "'";
         }
         if (columnExists($conn, 'bhld_ctctu', 'quycach_label') && array_key_exists('quycach_label', $data)) {
-            $v = trim((string)$data['quycach_label']);
+            $v = $attributes['quycach'];
             $updates[] = $v === '' ? "quycach_label = NULL" : "quycach_label = '" . mysqli_real_escape_string($conn, $v) . "'";
         }
         

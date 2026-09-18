@@ -3,7 +3,8 @@
  * API Cấp phát lần đầu - tạo CT + chi tiết + cấp phát + CT kỳ tiếp
  * POST body: { mact, manv, ngct, mapb, madm, vattu: [{mavt, dmtg},...] }
  */
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/vattu_attributes.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
@@ -55,18 +56,11 @@ try {
         $mavt = intval($vt['mavt']);
         $dmtg = intval($vt['dmtg']);
         $soLuong = isset($vt['so_luong']) ? max(1, intval($vt['so_luong'])) : 1;
-        $sizeLabel = isset($vt['size']) ? mysqli_real_escape_string($conn, trim((string)$vt['size'])) : '';
-        $mauLabel = isset($vt['mau']) ? mysqli_real_escape_string($conn, trim((string)$vt['mau'])) : '';
-        $loaiLabel = isset($vt['loai']) ? mysqli_real_escape_string($conn, trim((string)$vt['loai'])) : '';
-        $quyCachLabel = isset($vt['quycach']) ? mysqli_real_escape_string($conn, trim((string)$vt['quycach'])) : '';
-
-        if ($quyCachLabel === '') {
-            $parts = [];
-            if ($sizeLabel !== '') $parts[] = 'Size ' . $sizeLabel;
-            if ($mauLabel !== '') $parts[] = 'Mau ' . $mauLabel;
-            if ($loaiLabel !== '') $parts[] = 'Loai ' . $loaiLabel;
-            $quyCachLabel = implode(' - ', $parts);
-        }
+        $attributes = sanitizeVattuAttributes($conn, $mavt, $vt);
+        $sizeLabel = $attributes['size'];
+        $mauLabel = $attributes['mau'];
+        $loaiLabel = $attributes['loai'];
+        $quyCachLabel = $attributes['quycach'];
 
         if ($mavt <= 0) continue;
 

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sơ đồ quan hệ cơ sở dữ liệu BHLD</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5f6b76;
+      --line: #9aa8b5;
+      --blue: #1d5d8f;
+      --blue-soft: #eaf4fb;
+      --green: #286b4d;
+      --green-soft: #edf8f1;
+      --orange: #a95a16;
+      --orange-soft: #fff5e9;
+      --paper: #ffffff;
+      --bg: #e9eef2;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font: 13px/1.4 "Segoe UI", Arial, sans-serif;
+    }
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 18px auto;
+      padding: 12mm;
+      background: var(--paper);
+      box-shadow: 0 3px 18px rgba(23, 33, 43, .15);
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 4px; font-size: 25px; color: var(--blue); }
+    h2 {
+      margin: 18px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--blue);
+      font-size: 17px;
+      color: var(--blue);
+    }
+    .subtitle { margin-bottom: 12px; color: var(--muted); }
+    .notice {
+      padding: 9px 11px;
+      border-left: 4px solid var(--orange);
+      background: var(--orange-soft);
+      color: #6e3b0e;
+    }
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0; color: var(--muted); }
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 28px;
+      margin: 0 6px 3px 0;
+      border-top: 3px solid var(--line);
+      vertical-align: middle;
+    }
+    .legend .real::before { border-color: var(--green); }
+    .legend .logical::before { border-top-style: dashed; border-color: var(--blue); }
+
+    .diagram {
+      position: relative;
+      min-height: 178mm;
+      padding: 4mm;
+      border: 1px solid #d5dde4;
+      background: linear-gradient(135deg, #fbfdff, #f3f7fa);
+      overflow: hidden;
+    }
+    .table-box {
+      position: absolute;
+      width: 56mm;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+      box-shadow: 0 2px 5px rgba(23, 33, 43, .08);
+      overflow: hidden;
+      z-index: 2;
+    }
+    .table-box h3 {
+      margin: 0;
+      padding: 5px 7px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 13px;
+      border-bottom: 1px solid #c6dce9;
+    }
+    .table-box ul { list-style: none; margin: 0; padding: 5px 7px; }
+    .table-box li { white-space: nowrap; color: #3c4a55; }
+    .table-box li + li { margin-top: 2px; }
+    .pk { color: var(--orange); font-weight: 700; }
+    .fk { color: var(--green); font-weight: 600; }
+    .optional { color: var(--muted); }
+    .employees { left: 6mm; top: 57mm; }
+    .departments { left: 6mm; top: 8mm; }
+    .certificates { left: 70mm; top: 57mm; }
+    .details { left: 134mm; top: 57mm; }
+    .equipment { left: 70mm; top: 8mm; }
+    .profiles { left: 134mm; top: 8mm; }
+    .policies { left: 6mm; top: 124mm; }
+    .stock { left: 70mm; top: 124mm; }
+    .receipts { left: 134mm; top: 124mm; }
+    .recalls { left: 70mm; top: 160mm; }
+    .relations {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .relations line {
+      stroke: var(--blue);
+      stroke-width: .55;
+      stroke-dasharray: 2 1.5;
+      vector-effect: non-scaling-stroke;
+    }
+    .relations line.real { stroke: var(--green); stroke-dasharray: none; }
+    .join-note {
+      position: absolute;
+      right: 6mm;
+      top: 197mm;
+      width: 178mm;
+      padding: 6px;
+      border: 1px solid #b8c9d5;
+      background: #f4f9fc;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 6px 7px; border: 1px solid #cbd5dc; vertical-align: top; }
+    th { background: var(--blue-soft); color: var(--blue); text-align: left; }
+    .relation-real { color: var(--green); font-weight: 700; }
+    .relation-logical { color: var(--blue); font-weight: 700; }
+    .small { color: var(--muted); font-size: 11px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .page-break { break-before: page; page-break-before: always; }
+    .print-help { margin-top: 14px; color: var(--muted); font-size: 11px; }
+
+    @media print {
+      @page { size: A4 portrait; margin: 10mm; }
+      body { background: #fff; }
+      .page { width: auto; min-height: 277mm; margin: 0; padding: 0; box-shadow: none; }
+      .no-print { display: none; }
+      h2 { break-after: avoid; }
+      table, .diagram { break-inside: avoid; }
+      .page-break { break-before: page; page-break-before: always; }
+    }
+    @media (max-width: 1100px) {
+      .page { width: 100%; margin: 0; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>Sơ đồ quan hệ cơ sở dữ liệu BHLD</h1>
+      <p class="subtitle">Tài liệu mô tả các bảng chính, khóa liên kết và quan hệ nghiệp vụ được sử dụng trong project.</p>
+      <div class="notice"><strong>Lưu ý:</strong> đường xanh liền là khóa ngoại được khai báo rõ trong SQL; đường xanh dương đứt là quan hệ logic qua JOIN trong mã nguồn, chưa chắc đã có FOREIGN KEY ở database.</div>
+    </header>
+
+    <section>
+      <h2>1. Sơ đồ tổng quan</h2>
+      <div class="legend">
+        <span class="real">FK khai báo trong database</span>
+        <span class="logical">Quan hệ logic qua JOIN</span>
+      </div>
+      <div class="diagram">
+        <svg class="relations" viewBox="0 0 190 210" preserveAspectRatio="none" aria-label="Đường nối quan hệ giữa các bảng">
+          <!-- Phòng ban -> Nhân viên -->
+          <line class="real" x1="34" y1="28" x2="34" y2="57"></line>
+          <!-- Nhân viên -> Chứng từ -->
+          <line x1="62" y1="76" x2="70" y2="76"></line>
+          <!-- Nhân viên -> Hồ sơ -->
+          <line x1="62" y1="62" x2="134" y2="28"></line>
+          <!-- Nhân viên -> Định mức riêng -->
+          <line x1="34" y1="95" x2="34" y2="124"></line>
+          <!-- Chứng từ -> Chi tiết chứng từ -->
+          <line x1="126" y1="76" x2="134" y2="76"></line>
+          <!-- Chi tiết -> Danh mục vật tư -->
+          <line x1="162" y1="57" x2="126" y2="28"></line>
+          <!-- Danh mục vật tư -> Tồn kho -->
+          <line class="real" x1="98" y1="34" x2="98" y2="124"></line>
+          <!-- Danh mục vật tư -> Nhập kho -->
+          <line class="real" x1="112" y1="34" x2="150" y2="124"></line>
+          <!-- Chứng từ/chi tiết -> Thu hồi -->
+          <line x1="126" y1="94" x2="98" y2="160"></line>
+        </svg>
+
+        <article class="table-box departments">
+          <h3>bhld_phongban</h3>
+          <ul><li class="pk">PK mapb</li><li>tenphong</li></ul>
+        </article>
+        <article class="table-box employees">
+          <h3>bhld_nhanvien</h3>
+          <ul><li class="pk">PK manv</li><li class="fk">FK mapb</li><li>tennhanvien</li><li>dinhmuc</li><li>trangthai</li></ul>
+        </article>
+        <article class="table-box certificates">
+          <h3>bhld_ctu</h3>
+          <ul><li class="pk">PK mact</li><li class="fk">manv, mapb</li><li>madm</li><li>ngct</li><li>ghichu</li></ul>
+        </article>
+        <article class="table-box details">
+          <h3>bhld_ctctu</h3>
+          <ul><li class="pk">PK mact + mavt</li><li class="fk">mact, mavt</li><li>sl, dmtg</li><li>ngnhan, ngnhantt</li><li class="optional">size/mau/loai/quycach</li></ul>
+        </article>
+        <article class="table-box equipment">
+          <h3>bhld_dmvattu</h3>
+          <ul><li class="pk">PK mavt</li><li>tenvt</li><li>dvt</li><li>ghichu</li></ul>
+        </article>
+        <article class="table-box profiles">
+          <h3>bhld_nhanvien_hoso</h3>
+          <ul><li class="pk">PK/id</li><li class="fk">manv</li><li>giay_size, giay_loai</li><li>quanao_size, mu_mau</li></ul>
+        </article>
+        <article class="table-box policies">
+          <h3>bhld_nhanvien_vattu_dm</h3>
+          <ul><li class="pk">PK id</li><li class="fk">manv, mavt</li><li>dmuc_thang</li><li>so_luong, active</li></ul>
+        </article>
+        <article class="table-box stock">
+          <h3>bhld_tonkho</h3>
+          <ul><li class="pk">PK/FK mavt</li><li>so_luong_nhap</li><li>so_luong_cap_phat</li></ul>
+        </article>
+        <article class="table-box receipts">
+          <h3>bhld_nhapkho</h3>
+          <ul><li class="pk">PK id</li><li class="fk">FK mavt</li><li>so_luong</li><li>ngay_nhap</li></ul>
+        </article>
+        <article class="table-box recalls">
+          <h3>bhld_thuhoi</h3>
+          <ul><li class="pk">PK id</li><li class="fk">manv, mact, mavt</li><li>ngay_thuhoi</li><li>ly_do</li></ul>
+        </article>
+        <div class="join-note"><strong>Luồng chính:</strong><br>Nhân viên thuộc phòng ban, nhận chứng từ; chứng từ có nhiều dòng vật tư. Hồ sơ cung cấp thông tin size/màu theo nghiệp vụ; tồn kho và thu hồi theo vật tư.</div>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2>2. Danh sách quan hệ</h2>
+      <table>
+        <thead><tr><th>Bảng nguồn</th><th>Cột</th><th>Bảng đích</th><th>Kiểu</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td>bhld_nhanvien</td><td>mapb</td><td>bhld_phongban.mapb</td><td class="relation-logical">JOIN logic</td><td>Mỗi nhân viên thuộc một phòng ban.</td></tr>
+          <tr><td>bhld_ctu</td><td>manv</td><td>bhld_nhanvien.manv</td><td class="relation-logical">JOIN logic</td><td>Chứng từ cấp phát thuộc một nhân viên.</td></tr>
+          <tr><td>bhld_ctu</td><td>mapb</td><td>bhld_phongban.mapb</td><td class="relation-logical">JOIN logic</td><td>Phòng ban trên chứng từ.</td></tr>
+          <tr><td>bhld_ctctu</td><td>mact</td><td>bhld_ctu.mact</td><td class="relation-logical">JOIN logic</td><td>Chi tiết thuộc chứng từ.</td></tr>
+          <tr><td>bhld_ctctu</td><td>mavt</td><td>bhld_dmvattu.mavt</td><td class="relation-logical">JOIN logic</td><td>Chi tiết tham chiếu danh mục vật tư.</td></tr>
+          <tr><td>bhld_tonkho</td><td>mavt</td><td>bhld_dmvattu.mavt</td><td class="relation-real">FOREIGN KEY</td><td>Tồn kho tổng hợp theo vật tư.</td></tr>
+          <tr><td>bhld_nhapkho</td><td>mavt</td><td>bhld_dmvattu.mavt</td><td class="relation-real">FOREIGN KEY</td><td>Lịch sử nhập kho theo vật tư.</td></tr>
+          <tr><td>bhld_nhanvien_hoso</td><td>manv</td><td>bhld_nhanvien.manv</td><td class="relation-logical">JOIN logic</td><td>Size giày, size quần áo, màu mũ của nhân viên.</td></tr>
+          <tr><td>bhld_nhanvien_vattu_dm</td><td>manv, mavt</td><td>bhld_nhanvien, bhld_dmvattu</td><td class="relation-logical">JOIN logic</td><td>Định mức riêng theo nhân viên và vật tư.</td></tr>
+          <tr><td>bhld_thuhoi</td><td>manv, mact, mavt</td><td>nhân viên, chứng từ, vật tư</td><td class="relation-logical">JOIN logic</td><td>Lịch sử thu hồi vật tư đã cấp.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="two-col">
+      <div>
+        <h2>3. Luồng cấp phát</h2>
+        <ol>
+          <li><strong>bhld_nhanvien</strong> xác định người nhận.</li>
+          <li><strong>bhld_ctu</strong> tạo chứng từ cấp phát.</li>
+          <li><strong>bhld_ctctu</strong> lưu từng vật tư, trạng thái và chu kỳ cấp.</li>
+          <li><strong>bhld_dmvattu</strong> cung cấp tên và đơn vị tính.</li>
+          <li>Thông tin size/màu chỉ được dùng khi đúng quy tắc vật tư.</li>
+        </ol>
+      </div>
+      <div>
+        <h2>4. Luồng tồn kho và thu hồi</h2>
+        <ol>
+          <li><strong>bhld_nhapkho</strong> ghi từng lần nhập.</li>
+          <li><strong>bhld_tonkho</strong> tổng hợp nhập và đã cấp.</li>
+          <li><strong>bhld_thuhoi</strong> lưu lịch sử thu hồi.</li>
+          <li>Vật tư được đối chiếu qua <strong>mavt</strong>.</li>
+        </ol>
+      </div>
+    </section>
+
+    <p class="print-help no-print">In: nhấn Ctrl+P, chọn khổ giấy A4 và hướng dọc (Portrait). Tắt tùy chọn header/footer của trình duyệt nếu cần bản in gọn.</p>
+  </main>
+</body>
+</html>
