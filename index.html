@@ -56,6 +56,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" data-tab="attributes" href="#">
+        <i class="bi bi-tags me-1"></i>Danh Mục Thuộc Tính
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" data-tab="inventory" href="#">
         <i class="bi bi-boxes me-1"></i>Tồn Kho
       </a>
@@ -366,6 +371,27 @@
         <p class="text-muted mt-2">Không có vật tư</p>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- TAB: DANH MỤC THUỘC TÍNH -->
+<div id="tab-attributes" class="tab-panel container-fluid py-3 px-4 d-none">
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="text-primary mb-1"><i class="bi bi-tags me-2"></i>Danh mục loại giày và màu mũ</h5>
+          <p class="text-muted small mb-3">Các danh mục này được dùng trong combobox hồ sơ nhân viên.</p>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4"><label class="form-label small fw-semibold">Nhóm</label><select class="form-select" id="attr-group-input"><option value="shoe_type">Loại giày</option><option value="helmet_color">Màu mũ</option></select></div>
+            <div class="col-md-5"><label class="form-label small fw-semibold">Tên danh mục</label><input class="form-control" id="attr-name-input" placeholder="VD: Da cao cổ"></div>
+            <div class="col-md-3"><button class="btn btn-primary w-100" id="attr-add-btn"><i class="bi bi-plus-lg me-1"></i>Thêm danh mục</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6"><div class="card shadow-sm"><div class="card-header fw-semibold text-primary">Loại giày</div><div class="list-group list-group-flush" id="attr-shoe-type-list"></div></div></div>
+    <div class="col-md-6"><div class="card shadow-sm"><div class="card-header fw-semibold text-primary">Màu mũ</div><div class="list-group list-group-flush" id="attr-helmet-color-list"></div></div></div>
   </div>
 </div>
 

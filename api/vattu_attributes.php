@@ -35,7 +35,7 @@ function getVattuAttributeRules($conn, $mavt) {
 }
 
 function normalizedAttribute($conn, $value, $allowed) {
-    $value = trim((string)($value ?? ''));
+    $value = trim((string)(isset($value) ? $value : ''));
     if (!$allowed || $value === '') {
         return '';
     }
@@ -44,10 +44,15 @@ function normalizedAttribute($conn, $value, $allowed) {
 
 function sanitizeVattuAttributes($conn, $mavt, $input) {
     $rules = getVattuAttributeRules($conn, $mavt);
-    $size = normalizedAttribute($conn, $input['size'] ?? ($input['size_label'] ?? ''), $rules['cho_phep_size']);
-    $mau = normalizedAttribute($conn, $input['mau'] ?? ($input['mau_label'] ?? ''), $rules['cho_phep_mau']);
-    $loai = normalizedAttribute($conn, $input['loai'] ?? ($input['loai_label'] ?? ''), $rules['cho_phep_loai']);
-    $quycach = normalizedAttribute($conn, $input['quycach'] ?? ($input['quycach_label'] ?? ''), $rules['cho_phep_quycach']);
+    $sizeIn = isset($input['size']) ? $input['size'] : (isset($input['size_label']) ? $input['size_label'] : '');
+    $mauIn = isset($input['mau']) ? $input['mau'] : (isset($input['mau_label']) ? $input['mau_label'] : '');
+    $loaiIn = isset($input['loai']) ? $input['loai'] : (isset($input['loai_label']) ? $input['loai_label'] : '');
+    $quycachIn = isset($input['quycach']) ? $input['quycach'] : (isset($input['quycach_label']) ? $input['quycach_label'] : '');
+
+    $size = normalizedAttribute($conn, $sizeIn, $rules['cho_phep_size']);
+    $mau = normalizedAttribute($conn, $mauIn, $rules['cho_phep_mau']);
+    $loai = normalizedAttribute($conn, $loaiIn, $rules['cho_phep_loai']);
+    $quycach = normalizedAttribute($conn, $quycachIn, $rules['cho_phep_quycach']);
 
     return [
         'size' => $size,

@@ -20,6 +20,7 @@ const State = {
   dinhMucData: [], // cache danh sách định mức + chitiet
   equipmentOptionsLoaded: false,
   currentEmpPolicyRows: [],
+  profileAttributes: { shoe_type: [], helmet_color: [] },
 };
 
 // ===== UTILS =====
@@ -117,6 +118,7 @@ function initTabs() {
         if (tab === 'management') initManagementTab();
         if (tab === 'employees') initEmployeesTab();
         if (tab === 'equipment') initEquipmentTab();
+        if (tab === 'attributes') initAttributesTab();
         if (tab === 'inventory') initInventoryTab();
         if (tab === 'schedule') initScheduleTab();
         if (tab === 'uncapped') initUncappedTab();
@@ -951,7 +953,109 @@ async function initEmployeesTab() {
       renderEmpPolicyRows([]);
     });
   }
+  await loadProfileAttributes();
   loadEmployees();
+}
+
+let attributesInitialized = false;
+
+async function loadProfileAttributes() {
+  const fallback = {
+    shoe_type: ['Da', 'Thể thao', 'Cao cổ', 'Thấp cổ'].map((ten, index) => ({ id: 0 - index, nhom: 'shoe_type', ten, active: 1 })),
+    helmet_color: ['Trắng', 'Vàng', 'Xanh', 'Đỏ', 'Cam'].map((ten, index) => ({ id: -10 - index, nhom: 'helmet_color', ten, active: 1 })),
+  };
+  try {
+    const res = await API.getEquipmentAttributes();
+    if (!res.success || !Array.isArray(res.data) || res.data.length === 0) throw new Error(res.message || 'Danh mục trống');
+    State.profileAttributes.shoe_type = res.data.filter(item => item.nhom === 'shoe_type');
+    State.profileAttributes.helmet_color = res.data.filter(item => item.nhom === 'helmet_color');
+    if (!State.profileAttributes.shoe_type.length) State.profileAttributes.shoe_type = fallback.shoe_type;
+    if (!State.profileAttributes.helmet_color.length) State.profileAttributes.helmet_color = fallback.helmet_color;
+    renderProfileAttributeOptions();
+  } catch (err) {
+    State.profileAttributes = fallback;
+    renderProfileAttributeOptions();
+    console.warn('Không tải được danh mục thuộc tính, dùng danh mục mặc định:', err.message);
+  }
+}
+
+function renderProfileAttributeOptions() {
+  const values = [
+    ['emp-giay-loai', State.profileAttributes.shoe_type],
+    ['emp-mu-mau', State.profileAttributes.helmet_color],
+  ];
+  values.forEach(([id, items]) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const current = select.value;
+    const first = select.options[0]?.outerHTML || '';
+    select.innerHTML = first + items.map(item => `<option value="${escHtml(item.ten)}">${escHtml(item.ten)}</option>`).join('');
+    setProfileSelectValue(id, current);
+  });
+}
+
+async function initAttributesTab() {
+  if (!attributesInitialized) {
+    attributesInitialized = true;
+    document.getElementById('attr-add-btn').addEventListener('click', addAttributeCatalogItem);
+  }
+  await loadProfileAttributes();
+  renderAttributeCatalogLists();
+}
+
+function renderAttributeCatalogLists() {
+  const render = (id, items) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = items.length ? items.map(item => `
+      <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
+        <span>${escHtml(item.ten)}</span>
+        <span class="d-flex gap-1">
+          <button class="btn btn-sm btn-outline-primary" type="button" onclick="editAttributeCatalogItem(${item.id}, '${escHtml(item.ten)}')"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" type="button" onclick="removeAttributeCatalogItem(${item.id})"><i class="bi bi-trash"></i></button>
+        </span>
+      </div>`).join('') : '<div class="list-group-item text-muted small">Chưa có danh mục</div>';
+  };
+  render('attr-shoe-type-list', State.profileAttributes.shoe_type);
+  render('attr-helmet-color-list', State.profileAttributes.helmet_color);
+}
+
+async function addAttributeCatalogItem() {
+  const group = document.getElementById('attr-group-input').value;
+  const input = document.getElementById('attr-name-input');
+  const name = input.value.trim();
+  if (!name) { showToast('Vui lòng nhập tên danh mục', 'warning'); return; }
+  try {
+    const res = await API.addEquipmentAttribute(group, name);
+    if (!res.success) throw new Error(res.message || 'Thêm danh mục thất bại');
+    input.value = '';
+    await loadProfileAttributes();
+    renderAttributeCatalogLists();
+    showToast('Đã thêm danh mục', 'success');
+  } catch (err) { showToast('Lỗi thêm danh mục: ' + err.message, 'danger'); }
+}
+
+async function editAttributeCatalogItem(id, currentName) {
+  const name = window.prompt('Tên danh mục mới:', currentName);
+  if (!name || !name.trim()) return;
+  try {
+    const res = await API.updateEquipmentAttribute(id, name.trim());
+    if (!res.success) throw new Error(res.message || 'Cập nhật thất bại');
+    await loadProfileAttributes();
+    renderAttributeCatalogLists();
+    showToast('Đã cập nhật danh mục', 'success');
+  } catch (err) { showToast('Lỗi cập nhật danh mục: ' + err.message, 'danger'); }
+}
+
+async function removeAttributeCatalogItem(id) {
+  if (!window.confirm('Ẩn danh mục này?')) return;
+  try {
+    const res = await API.deleteEquipmentAttribute(id);
+    if (!res.success) throw new Error(res.message || 'Xóa thất bại');
+    await loadProfileAttributes();
+    renderAttributeCatalogLists();
+    showToast('Đã ẩn danh mục', 'success');
+  } catch (err) { showToast('Lỗi xóa danh mục: ' + err.message, 'danger'); }
 }
 
 function setEmpProfileInputs(emp) {
@@ -1288,6 +1392,9 @@ function renderEmployeeTable(list) {
           ? `<button class="btn btn-sm btn-outline-success" onclick="reactivateEmployee('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')"><i class="bi bi-person-check"></i> Kích hoạt lại</button>`
           : `<button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')"><i class="bi bi-person-x"></i> Nghỉ việc</button>`
         }
+        <button class="btn btn-sm btn-outline-danger ms-1" onclick="permanentlyDeleteEmployee('${escHtml(emp.manv)}','${escHtml(emp.tennhanvien)}')" title="Xóa vĩnh viễn">
+          <i class="bi bi-trash"></i>
+        </button>
       </td>
     </tr>`;
   }).join('');
@@ -1302,6 +1409,29 @@ function deleteEmployee(manv, tennhanvien) {
         loadEmployees('', document.getElementById('emp-show-all')?.checked);
       } else {
         showToast(res.message || 'Thao tác thất bại', 'danger');
+      }
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'danger');
+    }
+  });
+}
+
+function permanentlyDeleteEmployee(manv, tennhanvien) {
+  showConfirm(`Xóa vĩnh viễn nhân viên "${tennhanvien}" (${manv})? Không thể hoàn tác.`, async () => {
+    const adminPassword = window.prompt('Nhập mật khẩu admin để xác nhận xóa vĩnh viễn:');
+    if (adminPassword === null) return;
+    if (!adminPassword) {
+      showToast('Vui lòng nhập mật khẩu admin', 'warning');
+      return;
+    }
+    try {
+      const res = await API.permanentlyDeleteEmployee(manv, adminPassword);
+      if (res.success) {
+        showToast('Đã xóa vĩnh viễn nhân viên', 'success');
+        loadEmployees('', document.getElementById('emp-show-all')?.checked);
+        loadEmployeesForSelect();
+      } else {
+        showToast(res.message || 'Xóa nhân viên thất bại', 'danger');
       }
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'danger');
@@ -1725,11 +1855,15 @@ async function saveEmployee() {
             vattu.push(buildCtVattuItem(inp.dataset.mavt, inp.dataset.dmtg, qty, profilePayload));
           }
         });
-        const allocRes = await API.allocateFirst({ mact, manv, ngct, mapb, madm: dinhmuc, vattu });
-        if (allocRes.success) {
-          showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư.${policyWarn}`.trim(), 'success');
-        } else {
-          showToast('Lưu NV OK nhưng cấp phát lỗi: ' + (allocRes.message||'') + policyWarn, 'warning');
+        try {
+          const allocRes = await API.allocateFirst({ mact, manv, ngct, mapb, madm: dinhmuc, vattu });
+          if (allocRes.success) {
+            showToast(`Đã tạo CT ${mact} và cấp phát ${allocRes.data?.allocated || 0} vật tư.${policyWarn}`.trim(), 'success');
+          } else {
+            showToast('Đã lưu nhân viên nhưng cấp phát lỗi: ' + (allocRes.message || '') + policyWarn, 'warning');
+          }
+        } catch (allocationError) {
+          showToast('Đã lưu nhân viên nhưng cấp phát lỗi: ' + allocationError.message + policyWarn, 'warning');
         }
       } else {
         showToast((isEdit ? 'Cập nhật nhân viên thành công!' : 'Thêm nhân viên thành công!') + policyWarn, policyWarn ? 'warning' : 'success');

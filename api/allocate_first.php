@@ -140,7 +140,7 @@ try {
     ], "Cấp phát lần đầu thành công: $created vật tư");
 
 } catch (Exception $e) {
-    mysqli_rollback($conn);
+    @mysqli_rollback($conn);
     sendError($e->getMessage(), 500);
 }
 ?>

@@ -27,11 +27,13 @@ async function apiFetch(endpoint, options = {}) {
       credentials: 'include',
     });
 
-    if (response.status === 404) throw new Error('Không tìm thấy dữ liệu');
-    if (response.status === 500) throw new Error('Lỗi máy chủ');
-    if (!response.ok) throw new Error(`Lỗi HTTP: ${response.status}`);
-
-    const data = await response.json();
+    const responseText = await response.text();
+    let data = null;
+    try { data = responseText ? JSON.parse(responseText) : null; } catch { data = null; }
+    if (!response.ok) {
+      const detail = data?.message || responseText.replace(/\s+/g, ' ').slice(0, 240);
+      throw new Error(detail || (response.status === 404 ? 'Không tìm thấy dữ liệu' : `Lỗi HTTP: ${response.status}`));
+    }
     if (method !== 'GET' && data && data.success) {
       window.dispatchEvent(new CustomEvent('bhld:data-changed', {
         detail: { endpoint, method, at: Date.now() }
@@ -113,6 +115,12 @@ const API = {
     return apiFetch('/employees.php', {
       method: 'DELETE',
       body: JSON.stringify({ manv }),
+    });
+  },
+  permanentlyDeleteEmployee(manv, adminPassword) {
+    return apiFetch('/employees.php', {
+      method: 'DELETE',
+      body: JSON.stringify({ manv, permanent: 1, admin_password: adminPassword }),
     });
   },
 
@@ -225,6 +233,21 @@ const API = {
       method: 'DELETE',
       body: JSON.stringify({ mavt }),
     });
+  },
+
+  // ===== DANH MỤC THUỘC TÍNH =====
+  getEquipmentAttributes(group) {
+    const qs = group ? `?group=${encodeURIComponent(group)}` : '';
+    return apiFetch(`/equipment_attributes_v4.php${qs}`);
+  },
+  addEquipmentAttribute(nhom, ten) {
+    return apiFetch('/equipment_attributes_v4.php', { method: 'POST', body: JSON.stringify({ nhom, ten }) });
+  },
+  updateEquipmentAttribute(id, ten) {
+    return apiFetch('/equipment_attributes_v4.php', { method: 'PUT', body: JSON.stringify({ id, ten }) });
+  },
+  deleteEquipmentAttribute(id) {
+    return apiFetch('/equipment_attributes_v4.php', { method: 'DELETE', body: JSON.stringify({ id }) });
   },
 
   // ===== CẤP PHÁT / TRẢ =====

@@ -10,6 +10,48 @@ function tableExists($conn, $tableName) {
     return $r && mysqli_num_rows($r) > 0;
 }
 
+function ensureProfileTable($conn) {
+    $sql = "CREATE TABLE IF NOT EXISTS bhld_nhanvien_hoso (
+        manv VARCHAR(50) NOT NULL PRIMARY KEY,
+        giay_size VARCHAR(50) NULL,
+        giay_loai VARCHAR(100) NULL,
+        quanao_size VARCHAR(50) NULL,
+        mu_mau VARCHAR(50) NULL,
+        ghi_chu TEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+    if (!mysqli_query($conn, $sql)) {
+        return false;
+    }
+
+    $requiredColumns = [
+        'giay_size' => 'VARCHAR(50) NULL',
+        'giay_loai' => 'VARCHAR(100) NULL',
+        'quanao_size' => 'VARCHAR(50) NULL',
+        'mu_mau' => 'VARCHAR(50) NULL',
+        'ghi_chu' => 'TEXT NULL',
+    ];
+    $columnsResult = mysqli_query($conn, 'SHOW COLUMNS FROM bhld_nhanvien_hoso');
+    if (!$columnsResult) {
+        return false;
+    }
+
+    $columns = [];
+    while ($column = mysqli_fetch_assoc($columnsResult)) {
+        $columns[$column['Field']] = true;
+    }
+    foreach ($requiredColumns as $column => $definition) {
+        if (!isset($columns[$column])
+            && !mysqli_query($conn, "ALTER TABLE bhld_nhanvien_hoso ADD COLUMN $column $definition")) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 function buildProfileUpdateSql($conn, $input) {
     $allowed = ['giay_size', 'giay_loai', 'quanao_size', 'mu_mau', 'ghi_chu'];
     $cols = [];
@@ -127,10 +169,10 @@ try {
         $tennhanvien = mysqli_real_escape_string($conn, trim($input['tennhanvien']));
         $mapb       = mysqli_real_escape_string($conn, trim($input['mapb']));
         $dinhmuc    = isset($input['dinhmuc']) ? mysqli_real_escape_string($conn, trim($input['dinhmuc'])) : null;
-        $hasProfile = tableExists($conn, 'bhld_nhanvien_hoso');
+        $hasProfile = ensureProfileTable($conn);
 
         if (!$hasProfile) {
-            sendError('Thiếu bảng hồ sơ nhân viên bhld_nhanvien_hoso', 500);
+            sendError('Không thể khởi tạo bảng hồ sơ nhân viên: ' . mysqli_error($conn), 500);
         }
 
         $requiredProfile = [
@@ -159,25 +201,28 @@ try {
         $sql = "INSERT INTO bhld_nhanvien (manv, tennhanvien, mapb, dinhmuc)
                 VALUES ('$manv', '$tennhanvien', '$mapb', $dinhmucSql)";
 
-        if (mysqli_query($conn, $sql)) {
-            $profileParts = buildProfileUpdateSql($conn, $input);
-            if ($profileParts['has_fields']) {
-                $cols = implode(', ', array_merge(['manv'], $profileParts['columns']));
-                $vals = implode(', ', array_merge(["'$manv'"], $profileParts['values']));
-                $ups = implode(', ', $profileParts['updates']);
-                $profileSql = "INSERT INTO bhld_nhanvien_hoso ($cols) VALUES ($vals) ON DUPLICATE KEY UPDATE $ups";
-                if (!mysqli_query($conn, $profileSql)) {
-                    sendError('Lỗi lưu hồ sơ: ' . mysqli_error($conn), 500);
-                }
-            }
-
-            sendSuccess(
-                ['manv' => $manv, 'tennhanvien' => $tennhanvien, 'mapb' => $mapb, 'dinhmuc' => $dinhmuc],
-                'Thêm nhân viên thành công'
-            );
-        } else {
+        if (!mysqli_query($conn, $sql)) {
             sendError('Lỗi thêm nhân viên: ' . mysqli_error($conn), 500);
         }
+
+        $profileParts = buildProfileUpdateSql($conn, $input);
+        if ($profileParts['has_fields']) {
+            $cols = implode(', ', array_merge(['manv'], $profileParts['columns']));
+            $vals = implode(', ', array_merge(["'$manv'"], $profileParts['values']));
+            $ups = implode(', ', $profileParts['updates']);
+            $profileSql = "INSERT INTO bhld_nhanvien_hoso ($cols) VALUES ($vals) ON DUPLICATE KEY UPDATE $ups";
+            if (!mysqli_query($conn, $profileSql)) {
+                $profileError = mysqli_error($conn);
+                // Best-effort rollback for MyISAM/InnoDB alike.
+                mysqli_query($conn, "DELETE FROM bhld_nhanvien WHERE manv = '$manv'");
+                sendError('Lỗi lưu hồ sơ: ' . $profileError, 500);
+            }
+        }
+
+        sendSuccess(
+            ['manv' => $manv, 'tennhanvien' => $tennhanvien, 'mapb' => $mapb, 'dinhmuc' => $dinhmuc],
+            'Thêm nhân viên thành công'
+        );
     }
     elseif ($method === 'PUT') {
         $input = json_decode(file_get_contents('php://input'), true);
@@ -230,6 +275,36 @@ try {
         }
         
         $manv = mysqli_real_escape_string($conn, $input['manv']);
+
+        if (isset($input['permanent']) && intval($input['permanent']) === 1) {
+            $adminPassword = isset($input['admin_password']) ? trim($input['admin_password']) : '';
+            if ($adminPassword !== '1234') {
+                sendError('Mật khẩu admin không đúng', 403);
+            }
+
+            $certificateCheck = mysqli_query($conn, "SELECT 1 FROM bhld_ctu WHERE manv = '$manv' LIMIT 1");
+            if ($certificateCheck && mysqli_num_rows($certificateCheck) > 0) {
+                sendError('Không thể xóa nhân viên đã có chứng từ cấp phát. Hãy dùng chức năng Nghỉ việc.', 409);
+            }
+
+            if (tableExists($conn, 'bhld_nhanvien_vattu_dm')
+                && !mysqli_query($conn, "DELETE FROM bhld_nhanvien_vattu_dm WHERE manv = '$manv'")) {
+                sendError('Lỗi xóa định mức nhân viên: ' . mysqli_error($conn), 500);
+            }
+            if (tableExists($conn, 'bhld_nhanvien_hoso')
+                && !mysqli_query($conn, "DELETE FROM bhld_nhanvien_hoso WHERE manv = '$manv'")) {
+                sendError('Lỗi xóa hồ sơ nhân viên: ' . mysqli_error($conn), 500);
+            }
+
+            if (!mysqli_query($conn, "DELETE FROM bhld_nhanvien WHERE manv = '$manv'")) {
+                sendError('Lỗi xóa nhân viên: ' . mysqli_error($conn), 500);
+            }
+            if (mysqli_affected_rows($conn) === 0) {
+                sendError('Không tìm thấy nhân viên', 404);
+            }
+
+            sendSuccess(['manv' => $manv], 'Đã xóa vĩnh viễn nhân viên');
+        }
         
         // Đánh dấu nghỉ việc thay vì xóa thật (giữ lại lịch sử chứng từ)
         $sql = "UPDATE bhld_nhanvien SET trangthai = 0 WHERE manv = '$manv'";

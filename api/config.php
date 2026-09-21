@@ -84,6 +84,35 @@ function sendSuccess($data = null, $message = 'Success') {
     sendResponse(true, $data, $message);
 }
 
+// Đảm bảo mọi Throwable/fatal đều trả JSON để client không nhận HTTP 500 body rỗng.
+set_exception_handler(function ($e) {
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=UTF-8');
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => 'Lỗi server: ' . $e->getMessage(),
+        'data' => null,
+    ], JSON_UNESCAPED_UNICODE);
+});
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if (!$error) return;
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR];
+    if (!in_array($error['type'], $fatalTypes, true)) return;
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=UTF-8');
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => 'Lỗi server: ' . $error['message'] . ' @ ' . basename($error['file']) . ':' . $error['line'],
+        'data' => null,
+    ], JSON_UNESCAPED_UNICODE);
+});
+
 // Middleware kiểm tra đăng nhập
 $publicEndpoints = ['auth_login.php', 'auth_logout.php', 'auth_me.php'];
 $currentEndpoint = basename(isset($_SERVER['PHP_SELF']) ? $_SERVER['PHP_SELF'] : '');
