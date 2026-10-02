@@ -2740,6 +2740,35 @@ let allocSelectedKeys = new Set();
 let allocCurrentManv = null;
 let allocMode = 'employee'; // employee | team
 let allocCurrentPb = '';
+let allocTeamMapbByValue = new Map();
+let allocTeamNameByValue = new Map();
+
+const allocMergedTeams = [
+  {
+    name: 'Xưởng SCTBĐVL',
+    aliases: [
+      'Xưởng SC cơ khí chuyên dụng',
+      'Xưởng SC và CC ĐVL',
+      'Xưởng SC và CC máy ĐVL',
+    ],
+  },
+  {
+    name: 'Đội ĐVL Tổng hợp',
+    aliases: [
+      'Đội Carota tổng hợp',
+      'Đội công nghệ cao',
+    ],
+  },
+].map(team => ({
+  name: team.name,
+  aliases: new Set(team.aliases.map(normalizeVietnameseText)),
+}));
+function isHiddenAllocTeam(name) {
+  const compactName = normalizeVietnameseText(name).replace(/[^a-z0-9]/g, '');
+  return compactName.includes('coitubing')
+    || compactName.includes('coiltubing')
+    || (compactName.includes('mwd') && compactName.includes('lwd'));
+}
 
 async function initAllocateTab() {
   if (!allocInitialized) {
@@ -2780,29 +2809,57 @@ async function loadAllocSidebar() {
   // Populate PB filter
   const pbSel = document.getElementById('alloc-pb-filter');
   const curPb = pbSel.value;
-  // Build unique pb list with both mapb (value) and tenphongban (label)
-  const pbMap = {};
-  (State.employees || []).forEach(e => { if (e.mapb) pbMap[e.mapb] = e.tenphongban || e.mapb; });
-  const pbEntries = Object.entries(pbMap).sort((a, b) => a[1].localeCompare(b[1]));
+  const teamsByKey = new Map();
+  (State.employees || []).forEach(e => {
+    if (!e.mapb) return;
+    const mapb = String(e.mapb);
+    const departmentName = e.tenphongban || mapb;
+    const normalizedDepartmentName = normalizeVietnameseText(departmentName);
+    if (isHiddenAllocTeam(departmentName)) return;
+    const mergedTeam = allocMergedTeams.find(team => team.aliases.has(normalizedDepartmentName));
+    const key = mergedTeam ? `merged:${mergedTeam.name}` : `mapb:${mapb}`;
+    let team = teamsByKey.get(key);
+    if (!team) {
+      team = {
+        name: mergedTeam ? mergedTeam.name : departmentName,
+        mapbs: new Set(),
+      };
+      teamsByKey.set(key, team);
+    }
+    team.mapbs.add(mapb);
+  });
+  const teams = [...teamsByKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+  allocTeamMapbByValue = new Map();
+  allocTeamNameByValue = new Map();
   pbSel.innerHTML = '<option value="">-- Tất cả đội --</option>';
-  pbEntries.forEach(([mapb, ten]) => pbSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(mapb)}">${escHtml(ten)}</option>`));
+  teams.forEach(team => {
+    const mapbs = [...team.mapbs].sort((a, b) => a.localeCompare(b));
+    const value = mapbs[0];
+    allocTeamMapbByValue.set(value, mapbs);
+    allocTeamNameByValue.set(value, team.name);
+    pbSel.insertAdjacentHTML('beforeend', `<option value="${escHtml(value)}">${escHtml(team.name)}</option>`);
+  });
   pbSel.value = curPb;
   renderAllocEmpList();
 }
 
 function renderAllocEmpList() {
   const pb = document.getElementById('alloc-pb-filter').value;
+  const selectedMapbs = pb ? (allocTeamMapbByValue.get(pb) || [pb]) : null;
   const q = (document.getElementById('alloc-emp-search')?.value || '').trim().toLowerCase();
   const filtered = (State.employees || []).filter(e =>
     e.tennhanvien &&
-    (!pb || e.mapb === pb) &&
+    !isHiddenAllocTeam(e.tenphongban || e.mapb || '') &&
+    (!pb || selectedMapbs.includes(String(e.mapb))) &&
     (!q || e.tennhanvien.toLowerCase().includes(q) || e.manv.toLowerCase().includes(q))
   );
 
   // Group by phong ban
   const groups = {};
   filtered.forEach(emp => {
-    const dept = emp.tenphongban || emp.mapb || 'Chưa phân loại';
+    const dept = pb
+      ? (allocTeamNameByValue.get(pb) || emp.tenphongban || emp.mapb || 'Chưa phân loại')
+      : (emp.tenphongban || emp.mapb || 'Chưa phân loại');
     if (!groups[dept]) groups[dept] = [];
     groups[dept].push(emp);
   });
@@ -2913,7 +2970,10 @@ async function loadAllocateTeam() {
   updateAllocBulkBtn();
 
   try {
-    const employees = (State.employees || []).filter(e => e.tennhanvien && e.mapb === pb);
+    const selectedMapbs = allocTeamMapbByValue.get(pb) || [pb];
+    const employees = (State.employees || []).filter(e =>
+      e.tennhanvien && selectedMapbs.includes(String(e.mapb))
+    );
     if (!employees.length) {
       document.getElementById('alloc-empty').classList.remove('d-none');
       document.getElementById('alloc-emp-info').innerHTML = '<i class="bi bi-people-fill text-primary me-1"></i><strong>Không có nhân viên</strong>';
@@ -2925,7 +2985,7 @@ async function loadAllocateTeam() {
     allocItems = perEmployeeItems.flat();
 
     document.getElementById('alloc-emp-info').innerHTML =
-      `<i class="bi bi-people-fill text-primary me-1"></i><strong>${escHtml(employees[0]?.tenphongban || pb)}</strong> <span class="text-muted small">(${employees.length} NV)</span>`;
+      `<i class="bi bi-people-fill text-primary me-1"></i><strong>${escHtml(allocTeamNameByValue.get(pb) || employees[0]?.tenphongban || pb)}</strong> <span class="text-muted small">(${employees.length} NV)</span>`;
 
     if (allocItems.length === 0) {
       document.getElementById('alloc-empty').classList.remove('d-none');
