@@ -6,12 +6,20 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/vattu_attributes.php';
 
+function allocateNewQuery($conn, $sql, $step) {
+    $result = mysqli_query($conn, $sql);
+    if ($result === false) {
+        sendError($step . ': ' . mysqli_error($conn), 500);
+    }
+    return $result;
+}
+
 function columnExists($conn, $tableName, $columnName) {
     $tableName = mysqli_real_escape_string($conn, $tableName);
     $columnName = mysqli_real_escape_string($conn, $columnName);
     $sql = "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$tableName' AND column_name = '$columnName' LIMIT 1";
-    $r = mysqli_query($conn, $sql);
-    return $r && mysqli_num_rows($r) > 0;
+    $r = allocateNewQuery($conn, $sql, 'Lỗi kiểm tra cấu trúc bảng');
+    return mysqli_num_rows($r) > 0;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -23,7 +31,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = json_decode(file_get_contents('php://input'), true);
         
-        if (!isset($data['mact']) || !isset($data['mavt']) || !isset($data['ngnhan'])) {
+        if (!is_array($data) || !isset($data['mact']) || !isset($data['mavt']) || !isset($data['ngnhan'])) {
             sendError('Thiếu thông tin', 400);
         }
         
@@ -48,8 +56,12 @@ try {
         if ($hasType) $selectParts[] = 'loai_label';
         if ($hasSpec) $selectParts[] = 'quycach_label';
 
-        $result = mysqli_query($conn, "SELECT " . implode(',', $selectParts) . " FROM bhld_ctctu WHERE mact='$mact' AND mavt=$mavt");
-        if (!$result || mysqli_num_rows($result) === 0) {
+        $result = allocateNewQuery(
+            $conn,
+            "SELECT " . implode(',', $selectParts) . " FROM bhld_ctctu WHERE mact='$mact' AND mavt=$mavt",
+            'Lỗi tìm chi tiết cấp phát'
+        );
+        if (mysqli_num_rows($result) === 0) {
             sendError('Không tìm thấy', 404);
         }
         
@@ -63,7 +75,7 @@ try {
         foreach (['size', 'mau', 'loai', 'quycach'] as $field) {
             $labelField = $field . '_label';
             if (!array_key_exists($field, $attributeInput) && !array_key_exists($labelField, $attributeInput)) {
-                $attributeInput[$labelField] = $row[$labelField] ?? '';
+                $attributeInput[$labelField] = isset($row[$labelField]) ? $row[$labelField] : '';
             }
         }
         $attributes = sanitizeVattuAttributes($conn, $mavt, $attributeInput);
@@ -96,13 +108,21 @@ try {
         if ($hasType) $setParts[] = $loaiLabel === '' ? "loai_label=NULL" : "loai_label='$loaiLabel'";
         if ($hasSpec) $setParts[] = $quyCachLabel === '' ? "quycach_label=NULL" : "quycach_label='$quyCachLabel'";
 
-        mysqli_query($conn, "UPDATE bhld_ctctu SET " . implode(', ', $setParts) . " WHERE mact='$mact' AND mavt=$mavt");
+        allocateNewQuery(
+            $conn,
+            "UPDATE bhld_ctctu SET " . implode(', ', $setParts) . " WHERE mact='$mact' AND mavt=$mavt",
+            'Lỗi cập nhật chi tiết cấp phát'
+        );
         
         // Get master
-        $m_result = mysqli_query($conn, "SELECT manv, madm, mapb, ngct FROM bhld_ctu WHERE mact='$mact'");
+        $m_result = allocateNewQuery(
+            $conn,
+            "SELECT manv, madm, mapb, ngct FROM bhld_ctu WHERE mact='$mact'",
+            'Lỗi tìm chứng từ cấp phát'
+        );
         $next = ['created' => false];
         
-        if ($dmtg > 0 && $m_result && mysqli_num_rows($m_result) > 0) {
+        if ($dmtg > 0 && mysqli_num_rows($m_result) > 0) {
             $m = mysqli_fetch_assoc($m_result);
             
             // Calculate next period date - use ngnhan instead of ngct
@@ -118,14 +138,26 @@ try {
                 $next['skipped'] = 'mact_next trùng mact hiện tại (dmtg quá nhỏ)';
             } else {
             // Check master
-            $check_m = mysqli_query($conn, "SELECT mact FROM bhld_ctu WHERE mact='$mact_next'");
+            $check_m = allocateNewQuery(
+                $conn,
+                "SELECT mact FROM bhld_ctu WHERE mact='$mact_next'",
+                'Lỗi kiểm tra chứng từ kỳ tiếp'
+            );
             if (mysqli_num_rows($check_m) === 0) {
-                mysqli_query($conn, "INSERT INTO bhld_ctu (mact,manv,madm,mapb,ngct) VALUES ('$mact_next','{$m['manv']}','{$m['madm']}','{$m['mapb']}','$ngct_next')");
+                allocateNewQuery(
+                    $conn,
+                    "INSERT INTO bhld_ctu (mact,manv,madm,mapb,ngct) VALUES ('$mact_next','{$m['manv']}','{$m['madm']}','{$m['mapb']}','$ngct_next')",
+                    'Lỗi tạo chứng từ kỳ tiếp'
+                );
                 $next['master_created'] = true;
             }
             
             // Check detail
-            $check_d = mysqli_query($conn, "SELECT mact FROM bhld_ctctu WHERE mact='$mact_next' AND mavt=$mavt");
+            $check_d = allocateNewQuery(
+                $conn,
+                "SELECT mact FROM bhld_ctctu WHERE mact='$mact_next' AND mavt=$mavt",
+                'Lỗi kiểm tra chi tiết kỳ tiếp'
+            );
             if (mysqli_num_rows($check_d) === 0) {
                 $nCols = ['mact','mavt','sl','ngnhan','ngnhantt','dmtg'];
                 $nVals = ["'$mact_next'", $mavt, 0, "'1911-11-11'", "'1911-11-11'", $dmtg];
@@ -136,7 +168,11 @@ try {
                 if ($hasType) { $nCols[] = 'loai_label'; $nVals[] = $loaiLabel === '' ? 'NULL' : "'$loaiLabel'"; }
                 if ($hasSpec) { $nCols[] = 'quycach_label'; $nVals[] = $quyCachLabel === '' ? 'NULL' : "'$quyCachLabel'"; }
 
-                mysqli_query($conn, "INSERT INTO bhld_ctctu (" . implode(',', $nCols) . ") VALUES (" . implode(',', $nVals) . ")");
+                allocateNewQuery(
+                    $conn,
+                    "INSERT INTO bhld_ctctu (" . implode(',', $nCols) . ") VALUES (" . implode(',', $nVals) . ")",
+                    'Lỗi tạo chi tiết kỳ tiếp'
+                );
                 $next['detail_created'] = true;
             }
             
@@ -156,7 +192,7 @@ try {
     } else {
         sendError('Method not allowed', 405);
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     sendError($e->getMessage(), 500);
 }
 ?>

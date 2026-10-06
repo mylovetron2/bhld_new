@@ -16,6 +16,16 @@ function columnExists($conn, $tableName, $columnName) {
     return $r && mysqli_num_rows($r) > 0;
 }
 
+function allocationQuery($conn, $sql, $step) {
+    $result = mysqli_query($conn, $sql);
+    if ($result === false) {
+        $error = mysqli_error($conn);
+        @mysqli_rollback($conn);
+        sendError($step . ': ' . $error, 500);
+    }
+    return $result;
+}
+
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') sendError('Method not allowed', 405);
 
@@ -34,12 +44,9 @@ try {
     mysqli_begin_transaction($conn);
 
     // 1. Tạo CT master (nếu chưa có)
-    $chk = mysqli_query($conn, "SELECT mact FROM bhld_ctu WHERE mact='$mact'");
+    $chk = allocationQuery($conn, "SELECT mact FROM bhld_ctu WHERE mact='$mact'", 'Lỗi kiểm tra chứng từ');
     if (mysqli_num_rows($chk) === 0) {
-        if (!mysqli_query($conn, "INSERT INTO bhld_ctu (mact,manv,mapb,madm,ngct) VALUES ('$mact','$manv','$mapb','$madm','$ngct')")) {
-            mysqli_rollback($conn);
-            sendError('Lỗi tạo CT: ' . mysqli_error($conn), 500);
-        }
+        allocationQuery($conn, "INSERT INTO bhld_ctu (mact,manv,mapb,madm,ngct) VALUES ('$mact','$manv','$mapb','$madm','$ngct')", 'Lỗi tạo chứng từ');
     }
 
     $hasQtyRequired = columnExists($conn, 'bhld_ctctu', 'so_luong_yeu_cau');
@@ -69,8 +76,8 @@ try {
             : $ngct;
 
         // 2. Insert chi tiết sl=1 (cấp phát luôn)
-        $chkd = mysqli_query($conn, "SELECT sl FROM bhld_ctctu WHERE mact='$mact' AND mavt=$mavt");
-        if ($chkd && mysqli_num_rows($chkd) > 0) {
+        $chkd = allocationQuery($conn, "SELECT sl FROM bhld_ctctu WHERE mact='$mact' AND mavt=$mavt", 'Lỗi kiểm tra chi tiết cấp phát');
+        if (mysqli_num_rows($chkd) > 0) {
             $setParts = [
                 "sl=1",
                 "ngnhan='$ngct'",
@@ -84,7 +91,7 @@ try {
             if ($hasType) $setParts[] = $loaiLabel === '' ? "loai_label=NULL" : "loai_label='$loaiLabel'";
             if ($hasSpec) $setParts[] = $quyCachLabel === '' ? "quycach_label=NULL" : "quycach_label='$quyCachLabel'";
 
-            mysqli_query($conn, "UPDATE bhld_ctctu SET " . implode(',', $setParts) . " WHERE mact='$mact' AND mavt=$mavt");
+            allocationQuery($conn, "UPDATE bhld_ctctu SET " . implode(',', $setParts) . " WHERE mact='$mact' AND mavt=$mavt", 'Lỗi cập nhật chi tiết cấp phát');
         } else {
             $cols = ['mact','mavt','sl','ngnhan','ngnhantt','dmtg'];
             $vals = ["'$mact'", $mavt, 1, "'$ngct'", "'$ngnhantt'", $dmtg];
@@ -95,7 +102,7 @@ try {
             if ($hasType) { $cols[] = 'loai_label'; $vals[] = $loaiLabel === '' ? 'NULL' : "'$loaiLabel'"; }
             if ($hasSpec) { $cols[] = 'quycach_label'; $vals[] = $quyCachLabel === '' ? 'NULL' : "'$quyCachLabel'"; }
 
-            mysqli_query($conn, "INSERT INTO bhld_ctctu (" . implode(',', $cols) . ") VALUES (" . implode(',', $vals) . ")");
+            allocationQuery($conn, "INSERT INTO bhld_ctctu (" . implode(',', $cols) . ") VALUES (" . implode(',', $vals) . ")", 'Lỗi thêm chi tiết cấp phát');
         }
         $created++;
 
@@ -108,12 +115,12 @@ try {
 
             if ($mact_next !== $mact) {
                 // Tạo CT master kỳ sau nếu chưa có
-                $chkn = mysqli_query($conn, "SELECT mact FROM bhld_ctu WHERE mact='$mact_next'");
+                $chkn = allocationQuery($conn, "SELECT mact FROM bhld_ctu WHERE mact='$mact_next'", 'Lỗi kiểm tra chứng từ kỳ tiếp');
                 if (mysqli_num_rows($chkn) === 0) {
-                    mysqli_query($conn, "INSERT INTO bhld_ctu (mact,manv,mapb,madm,ngct) VALUES ('$mact_next','$manv','$mapb','$madm','$ngct_next')");
+                    allocationQuery($conn, "INSERT INTO bhld_ctu (mact,manv,mapb,madm,ngct) VALUES ('$mact_next','$manv','$mapb','$madm','$ngct_next')", 'Lỗi tạo chứng từ kỳ tiếp');
                 }
                 // Tạo chi tiết kỳ sau sl=0 nếu chưa có
-                $chknd = mysqli_query($conn, "SELECT mact FROM bhld_ctctu WHERE mact='$mact_next' AND mavt=$mavt");
+                $chknd = allocationQuery($conn, "SELECT mact FROM bhld_ctctu WHERE mact='$mact_next' AND mavt=$mavt", 'Lỗi kiểm tra chi tiết kỳ tiếp');
                 if (mysqli_num_rows($chknd) === 0) {
                     $nCols = ['mact','mavt','sl','ngnhan','ngnhantt','dmtg'];
                     $nVals = ["'$mact_next'", $mavt, 0, "'1911-11-11'", "'1911-11-11'", $dmtg];
@@ -124,14 +131,16 @@ try {
                     if ($hasType) { $nCols[] = 'loai_label'; $nVals[] = $loaiLabel === '' ? 'NULL' : "'$loaiLabel'"; }
                     if ($hasSpec) { $nCols[] = 'quycach_label'; $nVals[] = $quyCachLabel === '' ? 'NULL' : "'$quyCachLabel'"; }
 
-                    mysqli_query($conn, "INSERT INTO bhld_ctctu (" . implode(',', $nCols) . ") VALUES (" . implode(',', $nVals) . ")");
+                    allocationQuery($conn, "INSERT INTO bhld_ctctu (" . implode(',', $nCols) . ") VALUES (" . implode(',', $nVals) . ")", 'Lỗi tạo chi tiết kỳ tiếp');
                 }
                 $next_cts[$mact_next] = true;
             }
         }
     }
 
-    mysqli_commit($conn);
+    if (!mysqli_commit($conn)) {
+        sendError('Lỗi hoàn tất giao dịch cấp phát: ' . mysqli_error($conn), 500);
+    }
 
     sendSuccess([
         'mact'      => $mact,
